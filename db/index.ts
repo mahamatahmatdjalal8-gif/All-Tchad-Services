@@ -10,17 +10,20 @@ type DatabaseGlobal = typeof globalThis & {
 };
 
 function databaseUrl() {
-  const value = process.env.DATABASE_URL?.trim();
+  const value =
+    process.env.POSTGRES_URL?.trim() ||
+    process.env.DATABASE_URL?.trim();
+
   if (!value) {
     throw new Error(
-      "La variable DATABASE_URL est absente. Ajoutez l’URL du pool transactionnel Supabase dans Vercel.",
+      "La connexion PostgreSQL est absente. Ajoutez POSTGRES_URL ou DATABASE_URL dans Vercel.",
     );
   }
+
   return value;
 }
 
-export function getDb(): Database {
-  const runtime = globalThis as DatabaseGlobal;
+export function getDb(): Database {  const runtime = globalThis as DatabaseGlobal;
   if (runtime.__ALLO_TCHAD_DATABASE__) return runtime.__ALLO_TCHAD_DATABASE__;
 
   const client = postgres(databaseUrl(), {

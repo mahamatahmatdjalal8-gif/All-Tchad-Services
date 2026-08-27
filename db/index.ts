@@ -26,12 +26,13 @@ function databaseUrl() {
 export function getDb(): Database {  const runtime = globalThis as DatabaseGlobal;
   if (runtime.__ALLO_TCHAD_DATABASE__) return runtime.__ALLO_TCHAD_DATABASE__;
 
-  const client = postgres(databaseUrl(), {
-    max: 1,
-    prepare: false,
-    idle_timeout: 20,
-    connect_timeout: 15,
-  });
+const client = postgres(databaseUrl(), {
+  max: 5,
+  prepare: false,
+  idle_timeout: 10,
+  connect_timeout: 10,
+  max_lifetime: 60,
+});
   const database = drizzle(client, { schema });
 
   runtime.__ALLO_TCHAD_SQL__ = client;

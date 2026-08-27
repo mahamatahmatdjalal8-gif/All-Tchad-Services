@@ -1,0 +1,19 @@
+.trust-page { min-height: 100vh; background: #f6f3ea; color: #0a1d32; }
+.trust-header { height: 78px; padding: 0 clamp(20px, 6vw, 90px); display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #dce1df; background: rgba(255,255,255,.72); }
+.trust-header > a:last-child { font-size: 11px; font-weight: 750; color: #0e4da4; }
+.trust-brand { display: flex; gap: 10px; align-items: center; }
+.trust-brand > span { width: 40px; height: 40px; display: grid; place-items: center; background: #0e4da4; color: white; border-radius: 12px 12px 12px 4px; font-weight: 850; }
+.trust-brand div { display: grid; gap: 3px; line-height: 1; }.trust-brand strong { font-size: 13px; }.trust-brand small { color: #0e4da4; font-size: 8px; text-transform: uppercase; letter-spacing: .15em; font-weight: 800; }
+.trust-hero { padding: 85px clamp(22px, 10vw, 160px) 70px; background: #0a1d32; color: white; }
+.trust-hero > span { color: #f4c63d; font-size: 10px; font-weight: 850; text-transform: uppercase; letter-spacing: .17em; }
+.trust-hero h1 { max-width: 850px; margin: 16px 0 22px; font-size: clamp(42px, 6vw, 74px); line-height: 1; letter-spacing: -.055em; }
+.trust-hero p { max-width: 720px; margin: 0; color: #b9c6d1; font-size: 15px; line-height: 1.75; }
+.trust-document { max-width: 920px; margin: 0 auto; padding: 70px 22px; display: grid; gap: 16px; }
+.trust-document section { padding: clamp(23px, 4vw, 38px); background: white; border: 1px solid #dce1df; border-radius: 18px; }
+.trust-document h2 { margin: 0 0 15px; font-size: 22px; letter-spacing: -.03em; }
+.trust-document p, .trust-document li { color: #53616d; font-size: 13px; line-height: 1.75; }
+.trust-document ul, .trust-document ol { margin: 10px 0 0; padding-left: 21px; }
+.trust-callout { border-left: 4px solid #f4c63d !important; background: #fffdf5 !important; }
+.trust-links { padding: 35px clamp(22px, 7vw, 110px); display: flex; justify-content: center; flex-wrap: wrap; gap: 12px 25px; background: white; border-top: 1px solid #dce1df; }
+.trust-links a { color: #0e4da4; font-size: 10px; font-weight: 750; }
+@media (max-width: 640px) { .trust-header { height: 68px; }.trust-header > a:last-child { font-size: 9px; }.trust-hero { padding-top: 60px; }.trust-document { padding-top: 45px; } }

@@ -1,0 +1,12 @@
+import { TrustPage, TrustSection } from "../trust-page";
+
+export default function PrivacyPage() {
+  return <TrustPage eyebrow="Protection des données" title="Politique de confidentialité" intro="Nous collectons seulement les informations nécessaires pour traiter les demandes, vérifier les experts et résoudre les réclamations.">
+    <TrustSection title="Données collectées"><p>Nom, téléphone, ville, quartier, description du besoin, référence de demande, candidature professionnelle, avis, note et réclamation. Pour vérifier un candidat expert, nous recueillons aussi son type et numéro de pièce, les copies de sa pièce, une photo de lui avec sa pièce, ses preuves de travaux, ses références clients et, s’il en possède, son certificat.</p></TrustSection>
+    <TrustSection title="Utilisation"><ul><li>Traiter et suivre une demande de service.</li><li>Contacter un client ou un candidat expert.</li><li>Vérifier les professionnels et prévenir les abus.</li><li>Gérer les avis, plaintes, commissions et interventions terminées.</li></ul></TrustSection>
+    <TrustSection title="Documents privés"><p>Les pièces d’identité, photos de vérification, certificats, numéros personnels et références clients sont conservés dans un espace privé. Seuls les administrateurs autorisés peuvent les consulter pour accepter ou refuser un dossier. Ces documents ne sont jamais affichés dans l’annuaire public.</p></TrustSection>
+    <TrustSection title="Réseau et interactions"><p>Les publications des experts acceptés sont publiques. Les commentaires, abonnements, favoris et messages des clients sont associés à une demande vérifiée afin de limiter les abus. Seul le nom du client apparaît avec un commentaire ; son téléphone et sa référence restent privés.</p></TrustSection>
+    <TrustSection title="Partage et publication"><p>Les numéros de téléphone et autres coordonnées privées ne sont pas affichés publiquement. Pour les experts acceptés, l’annuaire peut afficher le nom, le métier, l’expérience, la zone d’intervention et la disponibilité avec leur accord. Un avis n’est jamais publié automatiquement : il doit d’abord être contrôlé.</p></TrustSection>
+    <TrustSection title="Conservation et demandes"><p>Les dossiers sont conservés pendant la durée nécessaire au suivi du service, à la sécurité et au règlement des litiges. Pour demander une correction ou une suppression, utilisez la page Contact en indiquant votre référence.</p></TrustSection>
+  </TrustPage>;
+}

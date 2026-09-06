@@ -4,6 +4,9 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { BadgeCheck, BarChart3, Bookmark, Briefcase, ChevronRight, CircleHelp, Clock, Eye, FileText, GraduationCap, Heart, Images, LogOut, Map, MapPin, MessageCircle, MoreHorizontal, Pencil, Settings, Share2, ShieldCheck, Star, Store, TrendingUp, UserRound, UsersRound, Wallet, Wrench } from "lucide-react";
 import AppBottomNav from "../app-bottom-nav";
+import ProfileMediaModal, {
+  type ProfileMediaKind,
+} from "./profile-media-modal";
 
 type Expert = { id: number; name: string; phone: string; trade: string; area: string; coverage: string; experience: number; availability: string; workingHours: string | null; workshopAddress: string | null; profileBio: string | null; profileImageKey: string | null; coverImageKey: string | null; status: string; reviewNote: string | null };
 type PostComment = { id: number; body: string; customerName: string; createdAt: string; replies: { id: number; body: string; createdAt: string }[] };
@@ -82,6 +85,8 @@ export default function ExpertWorkspace({ initialData }: { initialData: InitialD
   const [profileBio, setProfileBio] = useState(expert.profileBio || "");
   const [profilePhotoVersion, setProfilePhotoVersion] = useState(0);
   const [coverPhotoVersion, setCoverPhotoVersion] = useState(0);
+  const [profileMediaOpen, setProfileMediaOpen] =
+    useState<ProfileMediaKind | null>(null);
   const [hasProfilePhoto, setHasProfilePhoto] = useState(Boolean(expert.profileImageKey));
   const [hasCoverPhoto, setHasCoverPhoto] = useState(Boolean(expert.coverImageKey));
   const [profileSection, setProfileSection] = useState<ProfileSection>("overview");
@@ -476,14 +481,66 @@ export default function ExpertWorkspace({ initialData }: { initialData: InitialD
           <div className={`facebook-cover ${hasCoverPhoto ? "has-photo" : ""}`}>
             {hasCoverPhoto && <img src={`/api/expert/cover-photo?v=${coverPhotoVersion}`} alt="Photo de couverture professionnelle" />}
             {!hasCoverPhoto && <div><b>{expert.trade}</b><span>{expert.coverage}</span></div>}
-            <form onSubmit={uploadCoverPhoto}><label><span>📷</span><b>{busy === "cover-photo" ? "Envoi…" : hasCoverPhoto ? "Changer la couverture" : "Ajouter une couverture"}</b><input name="image" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => event.currentTarget.form?.requestSubmit()} required /></label><button disabled={busy === "cover-photo"}>Enregistrer</button></form>
+            <button
+              type="button"
+              className="facebook-cover-photo-button"
+              aria-label={
+                hasCoverPhoto
+                  ? "Voir la photo de couverture"
+                  : "Ajouter une photo de couverture"
+              }
+              onClick={() => setProfileMediaOpen("cover")}
+            />
+
+            <button
+              type="button"
+              className="facebook-cover-edit-button"
+              onClick={() => setProfileMediaOpen("cover")}
+            >
+              <span>📷</span>
+              <b>
+                {hasCoverPhoto
+                  ? "Modifier la couverture"
+                  : "Ajouter une couverture"}
+              </b>
+            </button>
             <div className="facebook-cover-menu"><button type="button" aria-label="Ouvrir les paramètres du compte" aria-expanded={profileMenuOpen} onClick={() => setProfileMenuOpen((open) => !open)}><MoreHorizontal aria-hidden="true" /></button>{profileMenuOpen && <div role="menu"><button type="button" role="menuitem" onClick={() => { setProfileMenuOpen(false); go("settings"); }}><Settings aria-hidden="true" /><span>Paramètres</span></button><button type="button" role="menuitem" className="cover-menu-signout" onClick={() => { setProfileMenuOpen(false); signOut(); }}><LogOut aria-hidden="true" /><span>Se déconnecter</span></button></div>}</div>
           </div>
           <div className="facebook-profile-identity">
-            <form className="facebook-avatar-editor" onSubmit={uploadProfilePhoto}>
-              <div>{hasProfilePhoto ? <img src={`/api/expert/profile-photo?v=${profilePhotoVersion}`} alt={`Photo de ${expert.name}`} /> : <b>{expert.name.slice(0, 1).toUpperCase()}</b>}<label aria-label="Changer la photo de profil">{busy === "profile-photo" ? "…" : "📷"}<input name="image" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => event.currentTarget.form?.requestSubmit()} required /></label></div>
-              <button disabled={busy === "profile-photo"}>Enregistrer la photo</button>
-            </form>
+            <div className="facebook-avatar-editor">
+  <div>
+    <button
+      type="button"
+      className="facebook-avatar-photo-button"
+      aria-label={
+        hasProfilePhoto
+          ? "Voir la photo de profil"
+          : "Ajouter une photo de profil"
+      }
+      onClick={() => setProfileMediaOpen("profile")}
+    >
+      {hasProfilePhoto ? (
+        <img
+          src={`/api/expert/profile-photo?v=${profilePhotoVersion}`}
+          alt={`Photo de ${expert.name}`}
+        />
+      ) : (
+        <b>
+          {expert.name.slice(0, 1).toUpperCase()}
+        </b>
+      )}
+    </button>
+
+    <button
+      type="button"
+      className="facebook-avatar-camera"
+      aria-label="Modifier la photo de profil"
+      onClick={() => setProfileMediaOpen("profile")}
+    >
+      📷
+    </button>
+  </div>
+</div>
             <div className="facebook-profile-name"><h2>{expert.name}{isVerifiedExpert && <i>✓</i>}</h2><p>{isVerifiedExpert ? profileBio || `${expert.trade} professionnel à ${expert.area}` : `Compte privé · ${expert.area}`}</p><div>{isVerifiedExpert ? <><strong>{initialData.followerCount}</strong> abonné{initialData.followerCount > 1 ? "s" : ""}<span>·</span><strong>{initialData.followingCount}</strong> suivi{initialData.followingCount > 1 ? "s" : ""}<span>·</span><strong>{completed}</strong> réalisation{completed > 1 ? "s" : ""}<span>·</span><strong>{initialData.reviews.length}</strong> avis</> : <><strong>{outgoingRequests.length}</strong> demande{outgoingRequests.length > 1 ? "s" : ""}<span>·</span><strong>{initialData.followingCount}</strong> expert{initialData.followingCount > 1 ? "s" : ""} suivi{initialData.followingCount > 1 ? "s" : ""}</>}</div></div>
             <div className="facebook-profile-actions"><button className="primary" onClick={() => go("dashboard")}><BarChart3 aria-hidden="true" /><span>Tableau professionnel</span></button><button className="profile-missions-button" onClick={() => go("missions")}><Briefcase aria-hidden="true" /><span>Mes missions</span>{awaitingDecision + active > 0 && <b>{awaitingDecision + active}</b>}</button><button onClick={() => go("edit-profile")}><Pencil aria-hidden="true" /><span>Modifier</span></button></div>
           </div>
@@ -551,5 +608,36 @@ export default function ExpertWorkspace({ initialData }: { initialData: InitialD
       {tab === "support" && <section className="expert-support"><article><b>?</b><span>Assistance</span><h2>Besoin d’aide sur une mission ?</h2><p>Contactez l’administration en indiquant le numéro de la demande. Ne partagez jamais votre numéro d’accès avec un client.</p><Link href="/contact">Contacter le service →</Link></article><article><b>⚑</b><span>Sécurité</span><h2>Signaler un problème</h2><p>Utilisez la procédure de plainte en cas de comportement dangereux, de désaccord grave ou de tentative de fraude.</p><Link href="/procedure-plainte">Ouvrir la procédure →</Link></article><article><b>✓</b><span>Bonnes pratiques</span><h2>Règles professionnelles</h2><p>Annoncez le prix avant le travail, respectez les horaires, protégez les données du client et photographiez seulement avec son accord.</p><Link href="/regles-experts">Lire les règles →</Link></article><button onClick={signOut}>Se déconnecter de cet appareil</button></section>}
     </section>
     {tab === "profile" && <AppBottomNav active="profile" />}
-  </main>;
+
+      {profileMediaOpen && (
+        <ProfileMediaModal
+          kind={profileMediaOpen}
+          open={true}
+          hasImage={
+            profileMediaOpen === "profile"
+              ? hasProfilePhoto
+              : hasCoverPhoto
+          }
+          imageUrl={
+            profileMediaOpen === "profile"
+              ? hasProfilePhoto
+                ? `/api/expert/profile-photo?v=${profilePhotoVersion}`
+                : null
+              : hasCoverPhoto
+                ? `/api/expert/cover-photo?v=${coverPhotoVersion}`
+                : null
+          }
+          onClose={() => setProfileMediaOpen(null)}
+          onChanged={(exists) => {
+            if (profileMediaOpen === "profile") {
+              setHasProfilePhoto(exists);
+              setProfilePhotoVersion(Date.now());
+            } else {
+              setHasCoverPhoto(exists);
+              setCoverPhotoVersion(Date.now());
+            }
+          }}
+          onNotice={setNotice}
+        />
+      )}</main>;
 }

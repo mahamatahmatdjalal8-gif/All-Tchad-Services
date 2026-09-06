@@ -4,6 +4,7 @@ import AppBottomNav from "../../app-bottom-nav";
 import SocialFeed from "../../reseau/social-feed";
 import { getPublicSocialData } from "../../social-data";
 import PublicExpertActions from "./public-expert-actions";
+import PublicProfileMedia from "./public-profile-media";
 import "../../reseau/reseau.css";
 import "./profile.css";
 
@@ -20,8 +21,24 @@ export default async function PublicExpertProfile({ params }: { params: Promise<
     <header className="public-expert-topbar"><Link href="/"><span>AT</span><strong>Allô Tchad Services</strong></Link><nav><Link href="/reseau">Réalisations</Link><Link href="/experts">Tous les experts</Link></nav></header>
     <section className="public-expert-shell">
       <section className="public-profile-card">
-        <div className={`public-profile-cover ${expert.hasCoverPhoto ? "has-photo" : ""}`}>{expert.hasCoverPhoto ? <img src={`/api/expert/cover-photo?id=${expert.id}`} alt="Couverture professionnelle" /> : <><b>{expert.trade}</b><span>{expert.area}</span></>}</div>
-        <div className="public-profile-identity"><div className="public-profile-avatar">{expert.hasProfilePhoto ? <img src={`/api/expert/profile-photo?id=${expert.id}`} alt={`Photo de ${expert.name}`} /> : expert.name.slice(0,1).toUpperCase()}</div><div><h1>{expert.name}<i>✓</i></h1><p>{expert.profileBio || `${expert.trade} professionnel à ${expert.area}`}</p><div className="public-profile-stats"><span><strong>{expert.followerCount}</strong> abonné{expert.followerCount > 1 ? "s" : ""}</span><span><strong>{expert.followingCount || 0}</strong> suivi{(expert.followingCount || 0) > 1 ? "s" : ""}</span><span><strong>{allSocialData.posts.length}</strong> publication{allSocialData.posts.length > 1 ? "s" : ""}</span></div></div><PublicExpertActions expert={expert} /></div>
+        <PublicProfileMedia
+          kind="cover"
+          expertId={expert.id}
+          name={expert.name}
+          trade={expert.trade}
+          area={expert.area}
+          hasProfilePhoto={expert.hasProfilePhoto}
+          hasCoverPhoto={expert.hasCoverPhoto}
+        />
+        <div className="public-profile-identity"><PublicProfileMedia
+  kind="profile"
+  expertId={expert.id}
+  name={expert.name}
+  trade={expert.trade}
+  area={expert.area}
+  hasProfilePhoto={expert.hasProfilePhoto}
+  hasCoverPhoto={expert.hasCoverPhoto}
+/><div><h1>{expert.name}<i>✓</i></h1><p>{expert.profileBio || `${expert.trade} professionnel à ${expert.area}`}</p><div className="public-profile-stats"><span><strong>{expert.followerCount}</strong> abonné{expert.followerCount > 1 ? "s" : ""}</span><span><strong>{expert.followingCount || 0}</strong> suivi{(expert.followingCount || 0) > 1 ? "s" : ""}</span><span><strong>{allSocialData.posts.length}</strong> publication{allSocialData.posts.length > 1 ? "s" : ""}</span></div></div><PublicExpertActions expert={expert} /></div>
       </section>
       <section className="public-profile-details"><article><h2>Informations professionnelles</h2><p><b>⌖</b> Travaille à <strong>{expert.area}</strong></p><p><b>⌁</b> Intervient dans <strong>{expert.coverage}</strong></p><p><b>⚒</b> <strong>{expert.trade}</strong> · {expert.experience} an(s) d’expérience</p><p><b>◷</b> {expert.availability}</p>{expert.workingHours && <p><b>▣</b> {expert.workingHours}</p>}</article><article><h2>Publications et réalisations</h2><p>Suivez ce profil pour retrouver ses nouveaux travaux en priorité dans votre fil.</p></article></section>
       <SocialFeed initialData={socialData} mode="profile" />

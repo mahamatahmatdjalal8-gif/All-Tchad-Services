@@ -1,0 +1,136 @@
+.admin-login-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at top, #e9f4ff 0, transparent 38%),
+    #f5f7fb;
+  color: #172033;
+}
+
+.admin-login-card {
+  width: min(440px, 100%);
+  padding: 34px;
+  border: 1px solid #e3e8f0;
+  border-radius: 26px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(17, 34, 68, .12);
+}
+
+.admin-login-card header {
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.admin-login-logo {
+  width: 62px;
+  height: 62px;
+  margin: 0 auto 16px;
+  display: grid;
+  place-items: center;
+  border-radius: 18px;
+  background: #1565d8;
+  color: #fff;
+  font-size: 21px;
+  font-weight: 900;
+}
+
+.admin-login-card header > span {
+  font-size: 13px;
+  font-weight: 800;
+  color: #1565d8;
+}
+
+.admin-login-card h1 {
+  margin: 7px 0;
+  font-size: clamp(28px, 6vw, 36px);
+}
+
+.admin-login-card header p {
+  margin: 0;
+  color: #657086;
+  line-height: 1.55;
+}
+
+.admin-login-card form {
+  display: grid;
+  gap: 18px;
+}
+
+.admin-login-card label {
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.admin-login-card input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 14px 15px;
+  border: 1px solid #d8deea;
+  border-radius: 13px;
+  outline: none;
+  background: #fbfcfe;
+  font: inherit;
+}
+
+.admin-login-card input:focus {
+  border-color: #1565d8;
+  box-shadow: 0 0 0 4px rgba(21, 101, 216, .1);
+}
+
+.admin-login-card button {
+  border: 0;
+  border-radius: 14px;
+  padding: 15px 18px;
+  background: #1565d8;
+  color: white;
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.admin-login-card button:disabled {
+  opacity: .65;
+  cursor: wait;
+}
+
+.admin-login-error {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fff1f1;
+  color: #b42318;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.admin-login-card footer {
+  margin-top: 22px;
+  padding-top: 18px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid #edf0f5;
+  font-size: 12px;
+  color: #758096;
+}
+
+.admin-login-card footer a {
+  color: #1565d8;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+@media (max-width: 520px) {
+  .admin-login-page {
+    padding: 14px;
+  }
+
+  .admin-login-card {
+    padding: 26px 20px;
+    border-radius: 22px;
+  }
+}

@@ -156,6 +156,7 @@ export default function AdminDashboard({ initialData, userName, signOutPath }: {
           <button className={tab === "requests" ? "active" : ""} onClick={() => setTab("requests")}><span>⌁</span> Demandes <b>{data.requests.length}</b></button>
           <button className={tab === "artisans" ? "active" : ""} onClick={() => setTab("artisans")}><span>♙</span> Experts <b>{data.artisans.length}</b></button>
           <button className={tab === "feedback" ? "active" : ""} onClick={() => setTab("feedback")}><span>◇</span> Avis & plaintes <b>{data.feedback.length}</b></button>
+          <button type="button" onClick={() => window.location.assign("/admin/application")}><span>⚙</span> Application <b>›</b></button>
           <button className={tab === "maintenance" ? "active" : ""} onClick={() => setTab("maintenance")}><span>⚙</span> Maintenance <b>!</b></button>
         </nav>
         <div className="admin-sidebar-foot"><Link href="/">Voir le site public ↗</Link><a href={signOutPath}>Se déconnecter</a></div>

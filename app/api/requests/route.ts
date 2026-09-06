@@ -3,6 +3,7 @@ import { getDb } from "../../../db";
 import { serviceRequests } from "../../../db/schema";
 import { getAdminApiUser } from "../../admin-access";
 import { createTrackingReference } from "../../tracking-reference";
+import { readAppSettings } from "../../../lib/app-settings";
 
 const clean = (value: unknown, max = 500) =>
   typeof value === "string" ? value.trim().slice(0, max) : "";
@@ -15,6 +16,21 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const settings = await readAppSettings();
+
+    if (
+      !settings.requestsEnabled ||
+      settings.maintenanceMode
+    ) {
+      return Response.json(
+        {
+          error:
+            "Les nouvelles demandes sont temporairement indisponibles.",
+        },
+        { status: 503 },
+      );
+    }
+
     const body = (await request.json()) as Record<string, unknown>;
     if (clean(body.website)) return new Response(null, { status: 204 });
 

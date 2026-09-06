@@ -12,6 +12,31 @@ const whatsappContacts = [
   { number: "23563304046", label: "WhatsApp officiel" },
 ];
 
+type AppSettings = {
+  homeEyebrow: string;
+  homeTitle: string;
+  homeDescription: string;
+  announcement: string;
+  whatsapp: string;
+  phone: string;
+  requestsEnabled: boolean;
+  postsEnabled: boolean;
+  maintenanceMode: boolean;
+};
+
+const defaultAppSettings: AppSettings = {
+  homeEyebrow: "Le bon expert, au bon moment",
+  homeTitle: "Que recherchez-vous aujourd’hui ?",
+  homeDescription:
+    "Découvrez les experts, leurs réalisations et leur disponibilité. Demandez un prix avant le travail.",
+  announcement: "",
+  whatsapp: "23563304046",
+  phone: "",
+  requestsEnabled: true,
+  postsEnabled: true,
+  maintenanceMode: false,
+};
+
 function buildMessage(form: HTMLFormElement, kind: "client" | "artisan") {
   const data = new FormData(form);
   const lines = kind === "client"
@@ -81,6 +106,8 @@ export default function Home() {
   const [artisanStep, setArtisanStep] = useState(1);
   const [artisanSummary, setArtisanSummary] = useState({ name: "", trade: "", area: "" });
   const [personalAccount, setPersonalAccount] = useState<{ name: string; phone: string } | null>(null);
+  const [appSettings, setAppSettings] = useState<AppSettings>(defaultAppSettings);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
   const artisanFormRef = useRef<HTMLFormElement>(null);
   const activeHomeCategory = serviceCategories.find((category) => category.id === homeCategory) ?? serviceCategories[0];
 
@@ -99,7 +126,31 @@ export default function Home() {
   }
 
   useEffect(() => {
-    fetch("/api/account").then(async (response) => response.ok ? response.json() : null).then((result) => { if (result?.account) setPersonalAccount(result.account); }).catch(() => undefined);
+    fetch("/api/account")
+      .then(async (response) => response.ok ? response.json() : null)
+      .then((result) => {
+        if (result?.account) setPersonalAccount(result.account);
+      })
+      .catch(() => undefined);
+
+    fetch("/api/app-settings")
+      .then(async (response) => {
+        if (!response.ok) return null;
+
+        return await response.json() as {
+          settings?: AppSettings;
+        };
+      })
+      .then((result) => {
+        if (result?.settings) {
+          setAppSettings(result.settings);
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        setSettingsLoaded(true);
+      });
+
     const frame = window.requestAnimationFrame(() => {
       const hash = window.location.hash;
       const params = new URLSearchParams(window.location.search);
@@ -151,6 +202,16 @@ export default function Home() {
   }
 
   function openRequest(service = "") {
+    if (
+      !appSettings.requestsEnabled ||
+      appSettings.maintenanceMode
+    ) {
+      window.alert(
+        "Les nouvelles demandes sont temporairement indisponibles."
+      );
+      return;
+    }
+
     setPreferredService(service);
     setPreferredExpert("");
     openModal("request");
@@ -200,6 +261,62 @@ export default function Home() {
     finally { setSubmitting(""); }
   }
 
+  if (!settingsLoaded) {
+    return (
+      <main
+        style={{
+          minHeight: "100vh",
+          display: "grid",
+          placeItems: "center",
+          background: "#ffffff",
+        }}
+      >
+        <strong>Allô Tchad Services</strong>
+      </main>
+    );
+  }
+
+  if (appSettings.maintenanceMode) {
+    return (
+      <main
+        style={{
+          minHeight: "100vh",
+          display: "grid",
+          placeItems: "center",
+          padding: 24,
+          background: "#f4f7fb",
+        }}
+      >
+        <section
+          style={{
+            width: "min(560px, 100%)",
+            padding: 32,
+            borderRadius: 22,
+            background: "#ffffff",
+            textAlign: "center",
+            boxShadow:
+              "0 15px 50px rgba(15,23,42,.08)",
+          }}
+        >
+          <div
+            className="brand-mark"
+            style={{ margin: "0 auto 20px" }}
+          >
+            AT
+          </div>
+
+          <span>Allô Tchad Services</span>
+          <h1>Maintenance en cours</h1>
+
+          <p>
+            Nous améliorons actuellement la plateforme.
+            Merci de revenir dans quelques instants.
+          </p>
+        </section>
+      </main>
+    );
+  }
+
   return <main>
     <header className="site-header">
       <a className="brand" href="#accueil" aria-label="Allô Tchad Services, accueil"><span className="brand-mark">AT</span><span><strong>Allô Tchad</strong><small>Services</small></span></a>
@@ -214,9 +331,26 @@ export default function Home() {
     </header>
 
     <section className="social-home professional-home" id="accueil" aria-label="Accueil vivant Allô Tchad Services">
+
+      {appSettings.announcement && (
+        <div
+          role="status"
+          style={{
+            marginBottom: 14,
+            padding: "13px 16px",
+            borderRadius: 14,
+            background: "#eef6ff",
+            border: "1px solid #bfdbfe",
+            fontWeight: 700,
+          }}
+        >
+          {appSettings.announcement}
+        </div>
+      )}
+
       <section className="home-live-toolbar">
-        <div className="home-live-copy"><span>Le bon expert, au bon moment</span><h1>Que recherchez-vous aujourd’hui ?</h1><p>Découvrez les experts, leurs réalisations et leur disponibilité. Demandez un prix avant le travail.</p></div>
-        <div className="home-live-actions"><a href="/experts"><i aria-hidden="true">⌕</i><span><small>Par métier ou quartier</small><strong>Rechercher un expert</strong></span><b>→</b></a><button type="button" onClick={() => openRequest()}><i aria-hidden="true">＋</i><span><small>Expliquez votre besoin</small><strong>Demander un service</strong></span><b>→</b></button></div>
+        <div className="home-live-copy"><span>{appSettings.homeEyebrow}</span><h1>{appSettings.homeTitle}</h1><p>{appSettings.homeDescription}</p></div>
+        <div className="home-live-actions"><a href="/experts"><i aria-hidden="true">⌕</i><span><small>Par métier ou quartier</small><strong>Rechercher un expert</strong></span><b>→</b></a><button type="button" onClick={() => openRequest()}><i aria-hidden="true">＋</i><span><small>Expliquez votre besoin</small><strong>{appSettings.requestsEnabled ? "Demander un service" : "Demandes suspendues"}</strong></span><b>→</b></button></div>
         <div className="home-trust-line"><span>✓ Experts vérifiés</span><span>✓ Prix annoncé avant</span><span>✓ Avis après intervention</span></div>
       </section>
 
@@ -226,8 +360,12 @@ export default function Home() {
         <div className="home-story-trades" aria-live="polite"><header><b>{activeHomeCategory.icon}</b><span><strong>{activeHomeCategory.name}</strong><small>{activeHomeCategory.description}</small></span></header><div>{activeHomeCategory.trades.map((trade) => <button type="button" key={trade} onClick={() => openRequest(trade)}>{trade}<span>＋</span></button>)}</div></div>
       </section>
 
-      <header className="home-activity-title"><div><span>Fil public</span><h2>Réalisations près de chez vous</h2><p>Les publications des experts vérifiés, mises à jour automatiquement.</p></div><a href="/reseau">Voir toutes les réalisations →</a></header>
-      <SocialFeed mode="home" />
+      {appSettings.postsEnabled && (
+        <>
+          <header className="home-activity-title"><div><span>Fil public</span><h2>Réalisations près de chez vous</h2><p>Les publications des experts vérifiés, mises à jour automatiquement.</p></div><a href="/reseau">Voir toutes les réalisations →</a></header>
+          <SocialFeed mode="home" />
+        </>
+      )}
     </section>
 
     <nav className="mobile-bottom-nav" aria-label="Navigation mobile">

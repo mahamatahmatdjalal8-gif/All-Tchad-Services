@@ -46,3 +46,60 @@ export async function POST(request: Request) {
     return Response.json({ error: "Impossible d’enregistrer la photo." }, { status: 500 });
   }
 }
+
+export async function DELETE() {
+  const context = await getExpertContext();
+
+  if (!context) {
+    return Response.json(
+      { error: "Accès expert refusé." },
+      { status: 403 },
+    );
+  }
+
+  const imageKey = context.expert.profileImageKey;
+
+  if (!imageKey) {
+    return Response.json({ ok: true });
+  }
+
+  const bucket = getObjectStorage();
+
+  if (!bucket) {
+    return Response.json(
+      { error: "Stockage indisponible." },
+      { status: 503 },
+    );
+  }
+
+  try {
+    await getDb()
+      .update(artisanApplications)
+      .set({
+        profileImageKey: null,
+        profileImageContentType: null,
+        profileImageSize: null,
+        updatedAt: new Date(),
+      })
+      .where(
+        eq(
+          artisanApplications.id,
+          context.expert.id,
+        ),
+      );
+
+    await bucket
+      .delete(imageKey)
+      .catch(() => undefined);
+
+    return Response.json({ ok: true });
+  } catch {
+    return Response.json(
+      {
+        error:
+          "Impossible de supprimer la photo de profil.",
+      },
+      { status: 500 },
+    );
+  }
+}

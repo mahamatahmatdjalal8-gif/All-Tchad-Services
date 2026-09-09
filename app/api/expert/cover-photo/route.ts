@@ -46,3 +46,60 @@ export async function POST(request: Request) {
   if (context.expert.coverImageKey) await bucket.delete(context.expert.coverImageKey).catch(() => undefined);
   return Response.json({ ok: true });
 }
+
+export async function DELETE() {
+  const context = await getExpertContext();
+
+  if (!context) {
+    return Response.json(
+      { error: "Accès expert refusé." },
+      { status: 403 },
+    );
+  }
+
+  const imageKey = context.expert.coverImageKey;
+
+  if (!imageKey) {
+    return Response.json({ ok: true });
+  }
+
+  const bucket = getObjectStorage();
+
+  if (!bucket) {
+    return Response.json(
+      { error: "Stockage indisponible." },
+      { status: 503 },
+    );
+  }
+
+  try {
+    await getDb()
+      .update(artisanApplications)
+      .set({
+        coverImageKey: null,
+        coverImageContentType: null,
+        coverImageSize: null,
+        updatedAt: new Date(),
+      })
+      .where(
+        eq(
+          artisanApplications.id,
+          context.expert.id,
+        ),
+      );
+
+    await bucket
+      .delete(imageKey)
+      .catch(() => undefined);
+
+    return Response.json({ ok: true });
+  } catch {
+    return Response.json(
+      {
+        error:
+          "Impossible de supprimer la couverture.",
+      },
+      { status: 500 },
+    );
+  }
+}

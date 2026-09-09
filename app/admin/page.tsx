@@ -2,7 +2,6 @@ import { desc } from "drizzle-orm";
 import Link from "next/link";
 import { getDb } from "../../db";
 import { artisanApplications, artisanDocuments, feedbackEntries, serviceRequests } from "../../db/schema";
-import { chatGPTSignOutPath } from "../chatgpt-auth";
 import { requireAdminPage } from "../admin-access";
 import AdminDashboard from "./dashboard";
 import "./admin.css";
@@ -36,5 +35,5 @@ export default async function AdminPage() {
 
   const artisansWithDocuments = artisans.map((artisan) => ({ ...artisan, documents: documents.filter((document) => document.applicationId === artisan.id) }));
   const serializable = JSON.parse(JSON.stringify({ requests, artisans: artisansWithDocuments, feedback }));
-  return <AdminDashboard initialData={serializable} userName={user.displayName} signOutPath={chatGPTSignOutPath("/")} />;
+  return <AdminDashboard initialData={serializable} userName={user.displayName} signOutPath="/api/admin/logout" />;
 }

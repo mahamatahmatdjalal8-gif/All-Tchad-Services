@@ -73,7 +73,7 @@ export async function POST(
         : "";
 
     const passwordOk =
-      verifyAdminPassword(password);
+      verifyAdminPassword(email, password);
 
     const emailOk =
       Boolean(email) &&

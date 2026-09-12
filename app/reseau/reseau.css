@@ -142,3 +142,31 @@
 .notifications-refreshed .notification-panel>.notification-error{font-size:13px;color:#a52626;padding:12px}
 .notifications-refreshed :is(button,a,summary):focus-visible{outline:3px solid #267adf;outline-offset:-3px}
 @media(max-width:380px){.notifications-refreshed .notification-panel>header{gap:4px;padding:10px}.notifications-refreshed .notification-panel>header strong{font-size:17px}.notification-rows .notification-row{padding:12px;gap:8px}}
+/* Version compacte approuvée : photo horizontale et actions en ligne. */
+.social-post.realization-card{border-radius:13px}
+.realization-card>header{padding:12px;grid-template-columns:36px minmax(0,1fr) 44px;gap:8px}
+.realization-card .expert-avatar{width:36px;height:36px;font-size:13px}
+.realization-card .post-expert-name{font-size:14px;line-height:1.3}
+.realization-card>header span,.realization-card>header small{font-size:11px;line-height:1.35}
+.realization-card .post-kind{margin:0 12px 7px;padding:4px 8px;font-size:9px}
+.realization-card>p{padding:0 12px 10px;font-size:14px;line-height:1.5}
+.realization-card .post-photo-button>img{aspect-ratio:2/1;object-fit:cover}
+.realization-card .post-photo-expand{top:auto;bottom:8px;right:8px;width:36px;height:36px}
+.realization-card .post-photo-expand svg{width:19px;height:19px}
+.realization-card .post-stats{padding:8px 12px;font-size:11px;gap:4px;line-height:1.4}
+.realization-card .post-actions{padding:2px 6px;gap:2px}
+.realization-card .post-actions button{min-height:44px;padding:6px 2px;flex-direction:row;gap:4px}
+.realization-card .post-actions button span{font-size:11px}
+.realization-card .post-actions svg{width:18px;height:18px}
+.realization-card .post-contact{margin:4px 10px 10px;min-height:44px;padding:9px;border-radius:8px;font-size:13px;gap:7px}
+.realization-card .post-contact svg{width:20px;height:20px}
+.post-options{position:relative;align-self:start}
+.post-options>summary{width:44px;height:44px;display:grid;place-items:center;list-style:none;cursor:pointer;font-size:24px;color:#52657b;border-radius:8px}
+.post-options>summary::-webkit-details-marker{display:none}
+.post-options>summary:hover{background:#eef3f8}
+.post-options-panel{position:absolute;right:0;top:44px;z-index:5;min-width:190px;padding:6px;border:1px solid #dce5ef;border-radius:10px;background:white;box-shadow:0 8px 24px #10233a22}
+.post-options:not([open])>.post-options-panel{display:none}
+.post-options-panel>button{width:100%;min-height:44px;padding:8px;display:flex;align-items:center;gap:8px;border:0;border-radius:6px;background:white;color:#36516e;text-align:left;font-size:13px;cursor:pointer}
+.post-options-panel>button:hover{background:#edf3fb}
+.post-options-panel>button svg{width:18px;height:18px}
+.post-options>summary:focus-visible{outline:3px solid #267adf;outline-offset:-3px}

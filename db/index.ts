@@ -1,12 +1,12 @@
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
+import { attachDatabasePool } from "@vercel/functions";
 import * as schema from "./schema";
 
 type Database = ReturnType<typeof drizzle<typeof schema>>;
 
 type DatabaseGlobal = typeof globalThis & {
-  __ALLO_TCHAD_DATABASE__?: Database;
-  __ALLO_TCHAD_SQL__?: ReturnType<typeof postgres>;
+  __ALLO_TCHAD_PG_DATABASE__?: Database;
 };
 
 function databaseUrl() {
@@ -23,19 +23,25 @@ function databaseUrl() {
   return value;
 }
 
-export function getDb(): Database {  const runtime = globalThis as DatabaseGlobal;
-  if (runtime.__ALLO_TCHAD_DATABASE__) return runtime.__ALLO_TCHAD_DATABASE__;
-
-const client = postgres(databaseUrl(), {
-  max: 5,
-  prepare: false,
-  idle_timeout: 10,
-  connect_timeout: 10,
-  max_lifetime: 60,
-});
+export function getDb(): Database {
+  const runtime = globalThis as DatabaseGlobal;
+  if (runtime.__ALLO_TCHAD_PG_DATABASE__) return runtime.__ALLO_TCHAD_PG_DATABASE__;
+  const client = new Pool({
+    connectionString: databaseUrl(),
+    max: 5,
+    connectionTimeoutMillis: 10000,
+    idleTimeoutMillis: 5000,
+    query_timeout: 15000,
+    maxLifetimeSeconds: 300,
+    keepAlive: true,
+  });
+  client.on("error", () => {
+    // Do not log connection strings or query parameters.
+    console.error("Database idle connection failed; the pool will replace it.");
+  });
+  attachDatabasePool(client);
   const database = drizzle(client, { schema });
 
-  runtime.__ALLO_TCHAD_SQL__ = client;
-  runtime.__ALLO_TCHAD_DATABASE__ = database;
+  runtime.__ALLO_TCHAD_PG_DATABASE__ = database;
   return database;
 }

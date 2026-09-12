@@ -15,9 +15,11 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "2.112.4",
+    "@vercel/functions": "3.9.7",
     "drizzle-orm": "0.45.2",
     "lucide-react": "^1.33.0",
     "next": "16.2.6",
+    "pg": "8.23.0",
     "postgres": "3.4.9",
     "react": "19.2.6",
     "react-dom": "19.2.6"
@@ -25,6 +27,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "4.2.1",
     "@types/node": "22.19.19",
+    "@types/pg": "8.23.1",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "drizzle-kit": "0.31.10",

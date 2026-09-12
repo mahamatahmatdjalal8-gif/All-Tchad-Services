@@ -62,3 +62,51 @@
 @media(max-width:480px){.network-header{padding-inline:10px}.network-brand>span{width:34px;height:34px}.network-brand strong{font-size:11px}.network-expert-actions{gap:5px}.network-round-action,.network-profile-action img,.network-profile-action>span{width:39px;height:39px}.network-notifications>div{right:-48px;top:47px}.network-profile-action i{display:none}}
 .post-actions{grid-template-columns:repeat(5,1fr)}.post-stats{gap:10px;flex-wrap:wrap}.expert-comment-reply{margin-top:7px;padding:7px 9px;display:grid;gap:2px;border-left:3px solid #0e63d3;border-radius:7px;background:#eef5ff;color:#29445a;font-size:8px}.expert-comment-reply>b{color:#0e63d3;font-size:7px}
 @media(max-width:560px){.post-actions{grid-template-columns:repeat(5,minmax(0,1fr))}.post-actions button{font-size:7px}.post-actions button span{font-size:6px}}
+/* Cartes de réalisations : lecture et actions accessibles sur mobile. */
+.social-post.realization-card{border-radius:20px;overflow:hidden;border-color:#dce5ef;box-shadow:0 5px 22px rgba(16,35,58,.04)}
+.realization-card>header{padding:20px;grid-template-columns:48px minmax(0,1fr) auto;gap:12px;align-items:start}
+.realization-card .expert-avatar{width:48px;height:48px;font-size:16px}
+.realization-card .post-expert-name{width:auto;font-size:16px;line-height:1.4;overflow-wrap:anywhere}
+.realization-card>header span{font-size:13px;line-height:1.5}
+.realization-card>header small{font-size:12px;line-height:1.5;color:#64748b}
+.realization-card .post-expert-actions button{min-height:44px;font-size:12px}
+.realization-card .post-expert-actions button:last-child{min-width:44px;font-size:22px}
+.realization-card .post-kind{margin:0 20px 12px;padding:7px 12px;font-size:10px}
+.realization-card>p{padding:0 20px 20px;font-size:16px;line-height:1.65;overflow-wrap:anywhere}
+.post-photo-button{display:block;position:relative;width:100%;padding:0;border:0;background:#edf2f7;cursor:zoom-in}
+.post-photo-button>img{display:block;width:100%;aspect-ratio:16/10;object-fit:contain}
+.post-photo-expand{position:absolute;top:14px;right:14px;display:grid;place-items:center;width:44px;height:44px;border-radius:50%;background:#10233acc;color:white}
+.post-photo-expand svg{width:22px;height:22px}
+.realization-card .post-stats{padding:14px 20px;font-size:12px;line-height:1.6;color:#64748b}
+.realization-card .post-actions{grid-template-columns:repeat(3,minmax(0,1fr));padding:8px 12px;gap:4px;border-top:1px solid #edf1f6}
+.realization-card .post-actions button{min-height:48px;display:flex;align-items:center;justify-content:center;gap:7px;padding:8px 4px;font-size:14px;color:#36516e}
+.realization-card .post-actions button span{display:inline;margin:0;font-size:13px;font-weight:700}
+.realization-card .post-actions button.active{color:#0e4da4;background:#edf3fb}
+.realization-card .post-actions svg{width:21px;height:21px;flex-shrink:0}
+.post-secondary-actions{display:flex;justify-content:space-between;padding:0 20px 8px;gap:8px}
+.post-secondary-actions button{display:flex;align-items:center;gap:7px;min-height:44px;border:0;background:transparent;color:#64748b;font:inherit;font-size:12px;cursor:pointer}
+.post-secondary-actions button[aria-pressed=true]{color:#0e4da4}
+.post-secondary-actions svg{width:16px;height:16px}
+.realization-card .post-contact{margin:0 20px 20px;padding:14px;min-height:52px;display:flex;align-items:center;justify-content:center;gap:10px;border-radius:12px;background:#0866df;color:white;font-size:16px;font-weight:700;text-decoration:none;text-align:center}
+.post-contact svg{width:24px;height:24px;flex-shrink:0}
+.realization-card .post-contact:hover{background:#0754b8}
+.realization-card :is(a,button,input):focus-visible,.post-photo-dialog button:focus-visible{outline:3px solid #267adf;outline-offset:3px}
+.post-photo-dialog{width:min(1100px,94vw);max-width:94vw;max-height:94dvh;padding:52px 12px 12px;border:0;border-radius:16px;background:#10233a;color:white}
+.post-photo-dialog::backdrop{background:rgba(5,16,29,.88)}
+.post-photo-dialog>img{display:block;width:100%;height:auto;max-height:calc(90dvh - 70px);object-fit:contain}
+.post-photo-dialog>button{position:absolute;right:8px;top:6px;width:44px;height:44px;display:grid;place-items:center;border:0;border-radius:50%;background:#fff;color:#10233a;cursor:pointer}
+.realization-card .comment-form input{font-size:16px}
+.realization-card .comments-list p{font-size:13px;line-height:1.6}
+@media(max-width:560px){
+.realization-card>header{padding:16px;grid-template-columns:42px minmax(0,1fr) auto;gap:9px}
+.realization-card .expert-avatar{width:42px;height:42px}
+.realization-card .post-expert-name{font-size:15px}
+.realization-card>header span{font-size:12px}
+.realization-card .post-expert-actions button{font-size:11px;padding-inline:6px}
+.realization-card .post-kind{margin-left:16px}
+.realization-card>p{padding-inline:16px;font-size:15px}
+.realization-card .post-actions{padding-inline:6px}
+.realization-card .post-actions button{flex-direction:column;gap:4px}
+.realization-card .post-actions button span{font-size:12px}
+.realization-card .post-contact{margin:0 16px 16px;font-size:15px}
+}

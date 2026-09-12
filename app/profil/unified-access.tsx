@@ -10,14 +10,32 @@ export default function UnifiedAccess({ returnTo = "" }: { returnTo?: string }) 
   const [showPassword, setShowPassword] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setBusy(true); setError("");
+    event.preventDefault();
+    if (busy) return;
+    setBusy(true); setError("");
     const values = Object.fromEntries(new FormData(event.currentTarget));
-    const response = await fetch("/api/account", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...values, action: mode }) });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok) { setError(result.error || "Connexion impossible."); setBusy(false); return; }
-    // Le compte privé est disponible immédiatement. Les capacités publiques
-    // restent liées à la validation ultérieure de la candidature.
-    window.location.assign(returnTo || result.next || "/espace-expert?tab=profile");
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 20000);
+    try {
+      const response = await fetch("/api/account", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...values, action: mode }), signal: controller.signal });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || result?.ok !== true) {
+        setError(response.status === 429
+          ? "Trop de tentatives. Patientez une minute avant de réessayer."
+          : typeof result?.error === "string" ? result.error : "Le serveur ne répond pas correctement. Réessayez dans un instant.");
+        return;
+      }
+      const next = returnTo || result.next;
+      window.location.assign(typeof next === "string" && next.startsWith("/") && !next.startsWith("//") && !next.includes("\\")
+        ? next : "/espace-expert?tab=profile");
+    } catch {
+      setError(controller.signal.aborted
+        ? "La demande prend trop de temps. Si vous créiez un compte, essayez de vous connecter : sa création a peut-être abouti."
+        : "Connexion interrompue. Vérifiez votre réseau puis réessayez. Si vous créiez un compte, essayez de vous connecter.");
+    } finally {
+      window.clearTimeout(timeout);
+      setBusy(false);
+    }
   }
 
   return <section className="unified-access-shell personal-access-shell">

@@ -637,4 +637,55 @@
     flex-basis:100%;
     margin-right:0;
   }
+}/* Messagerie lisible et adaptable à la hauteur disponible. */
+.messenger-refreshed .conversation-list{display:flex!important;flex-direction:column;min-height:0}
+.messenger-refreshed .conversation-list>header{flex-direction:column;align-items:stretch;gap:16px;padding:22px 18px 16px!important;flex-shrink:0}
+.messenger-refreshed .conversation-list>header strong{font-size:28px!important;color:#10233a}
+.messenger-refreshed .conversation-list>header span{font-size:13px;line-height:1.5}
+.messenger-refreshed .conversation-list>header>button{width:100%;height:auto;min-height:48px;display:flex;align-items:center;justify-content:center;gap:9px;border-radius:12px;background:#0866df;color:white;font-size:14px;font-weight:700}
+.messenger-refreshed svg{width:22px;height:22px;flex-shrink:0}
+.messenger-refreshed .conversation-search{flex-shrink:0;min-height:48px;border-radius:14px}
+.messenger-refreshed .conversation-search input{min-width:0;font-size:16px}
+.messenger-refreshed .conversation-list>nav{flex-shrink:0}
+.messenger-refreshed .conversation-list>nav button{min-height:44px;font-size:13px;display:flex;align-items:center;gap:7px}
+.unread-total{min-width:22px;padding:3px 6px;border-radius:20px;background:#0866df;color:white;font-size:12px}
+.messenger-refreshed .conversation-items{flex:1;min-height:0;padding:0 8px 12px;overflow-y:auto}
+.messenger-refreshed .conversation-items>button{min-height:88px;border-radius:14px;padding:14px 10px;gap:8px}
+.messenger-refreshed .conversation-items>button.active{background:#eaf3ff}
+.messenger-refreshed .conversation-items>button strong{font-size:15px}
+.messenger-refreshed .conversation-items>button small{font-size:13px;line-height:1.5}
+.messenger-refreshed .conversation-items>button time{font-size:11px}
+.messenger-refreshed .conversation-items>button>b{background:#e8edff;color:#304e95;font-size:19px}
+.messenger-refreshed .conversation-view{display:flex;flex-direction:column;min-height:0}
+.messenger-refreshed .conversation-view>header{flex-shrink:0;min-height:80px}
+.messenger-refreshed .conversation-view>header strong{font-size:17px}
+.messenger-refreshed .conversation-view>header span{font-size:12px;line-height:1.5}
+.messenger-refreshed .thread-date{flex-shrink:0;background:white}
+.messenger-refreshed .thread-date span{font-size:12px}
+.messenger-refreshed .expert-message-list{flex:1;min-height:0;background:#fff;align-content:start}
+.messenger-refreshed .expert-message-list article p{font-size:16px;line-height:1.6;padding:12px 15px;overflow-wrap:anywhere;white-space:pre-wrap}
+.messenger-refreshed .expert-message-list article small{font-size:11px;line-height:1.6}
+.messenger-refreshed .conversation-view>form{flex-shrink:0;grid-template-columns:minmax(0,1fr) 48px!important;padding:12px!important}
+.messenger-refreshed .conversation-view>form input{min-height:48px;font-size:16px}
+.messenger-refreshed .conversation-view>form button{width:48px;height:48px}
+.messenger-refreshed .conversation-view>form button:disabled{opacity:.55;cursor:wait}
+.messenger-refreshed .choose-thread{flex:1;text-align:center;padding:24px}
+.messenger-refreshed .choose-thread>strong{font-size:22px}
+.messenger-refreshed .choose-thread>span{font-size:14px;line-height:1.6}
+.messenger-empty{padding:35px 16px;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;color:#64748b}
+.messenger-empty>svg{width:44px;height:44px;color:#0866df}
+.messenger-empty>strong{font-size:17px!important;white-space:normal!important;color:#18324c}
+.messenger-empty>p{margin:0;font-size:14px;line-height:1.6}
+.messenger-empty>button{min-height:46px;padding:10px 14px;display:flex;align-items:center;gap:8px;border:0;border-radius:12px;background:#0866df;color:#fff;font-size:14px;cursor:pointer}
+.messenger-refreshed .new-conversation-form{flex-shrink:0;max-height:50%;overflow:auto}
+.messenger-refreshed .new-conversation-form :is(input,select,textarea){font-size:16px}
+.messenger-refreshed .new-conversation-form button{min-height:44px;font-size:14px}
+.messenger-refreshed :is(button,input,select,textarea):focus-visible{outline:3px solid #267adf;outline-offset:2px}
+.messenger-refreshed .collaboration-service-card{flex-shrink:0;max-height:30%;overflow:auto}
+@media(max-width:760px){
+.messenger-refreshed{min-height:360px;height:calc(100dvh - 145px)}
+.messenger-refreshed .conversation-view{display:none}
+.messenger-refreshed.thread-open .conversation-view{display:flex}
+.messenger-refreshed .thread-back{display:grid;place-items:center;min-height:44px}
+.messenger-refreshed .conversation-view>form{padding-bottom:calc(12px + env(safe-area-inset-bottom))!important}
 }

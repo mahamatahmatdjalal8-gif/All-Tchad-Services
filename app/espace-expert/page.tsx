@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, or } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or } from "drizzle-orm";
 import { getDb } from "../../db";
 import { artisanApplications, clientSessions, expertPosts, expertRelationships, feedbackEntries, postComments, postFavorites, postLikes, postReplies, postShares, postViews, requestMessages, serviceRequests } from "../../db/schema";
 import { getExpertContext } from "../social-auth";
@@ -24,12 +24,12 @@ export default async function ExpertSpacePage() {
   ]);
   const postIds = new Set(posts.map((post) => post.id));
   const [allLikes, allComments, allReplies, allFavorites, allShares, allViews, acceptedExperts, clientIdentities, members] = await Promise.all([
-    db.select().from(postLikes),
-    db.select().from(postComments).orderBy(asc(postComments.createdAt)).limit(1000),
-    db.select().from(postReplies).orderBy(asc(postReplies.createdAt)).limit(1000),
-    db.select().from(postFavorites),
-    db.select().from(postShares),
-    db.select().from(postViews),
+    posts.length ? db.select().from(postLikes).where(inArray(postLikes.postId, [...postIds])) : Promise.resolve([]),
+    posts.length ? db.select().from(postComments).where(inArray(postComments.postId, [...postIds])).orderBy(asc(postComments.createdAt)).limit(1000) : Promise.resolve([]),
+    posts.length ? db.select().from(postReplies).where(inArray(postReplies.commentId, db.select({ id: postComments.id }).from(postComments).where(inArray(postComments.postId, [...postIds])))).orderBy(asc(postReplies.createdAt)).limit(1000) : Promise.resolve([]),
+    posts.length ? db.select().from(postFavorites).where(inArray(postFavorites.postId, [...postIds])) : Promise.resolve([]),
+    posts.length ? db.select().from(postShares).where(inArray(postShares.postId, [...postIds])) : Promise.resolve([]),
+    posts.length ? db.select().from(postViews).where(inArray(postViews.postId, [...postIds])) : Promise.resolve([]),
     db.select({ id: artisanApplications.id, name: artisanApplications.name }).from(artisanApplications),
     db.select({ sessionId: clientSessions.id, customerName: serviceRequests.customerName }).from(clientSessions).innerJoin(serviceRequests, eq(clientSessions.requestId, serviceRequests.id)).limit(1000),
     db.select({ id: artisanApplications.id, name: artisanApplications.name, status: artisanApplications.status, trade: artisanApplications.trade, area: artisanApplications.area }).from(artisanApplications).orderBy(asc(artisanApplications.name)).limit(1000),
@@ -47,7 +47,7 @@ export default async function ExpertSpacePage() {
     viewCount: allViews.filter((item) => postIds.has(item.postId) && item.postId === post.id).length,
   }));
   const requestIds = new Set([...requests.filter((item) => item.requesterExpertId), ...outgoingRequests].map((item) => item.id));
-  const messages = (await db.select().from(requestMessages).orderBy(asc(requestMessages.createdAt)).limit(1000)).filter((message) => requestIds.has(message.requestId));
+  const messages = requestIds.size ? await db.select().from(requestMessages).where(inArray(requestMessages.requestId, [...requestIds])).orderBy(asc(requestMessages.createdAt)).limit(1000) : [];
   const requestReferences = new Set(requests.map((item) => item.reference));
   const reviews = allFeedback.filter((item) => item.kind === "review" && item.requestReference && requestReferences.has(item.requestReference));
   const followerCount = relationships.filter((item) => item.follows).length;

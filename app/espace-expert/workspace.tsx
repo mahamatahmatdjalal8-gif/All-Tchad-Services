@@ -390,7 +390,7 @@ export default function ExpertWorkspace({ initialData }: { initialData: InitialD
     else setNotice(result.error || "Réponse impossible."); setBusy("");
   }
 
-  return <main className={`expert-workspace expert-workspace-v2${tab === "profile" ? " expert-profile-nav-visible" : ""}`}>
+  return <main className={`expert-workspace expert-workspace-v2${tab === "profile" ? " expert-profile-nav-visible" : ""}${tab === "messages" ? " expert-messages-screen" : ""}`}>
     <aside>
       <Link className="space-brand" href="/"><span>AT</span><div><strong>Allô Tchad</strong><small>Espace professionnel</small></div></Link>
       <div className="space-profile">{hasProfilePhoto ? <img src={`/api/expert/profile-photo?v=${profilePhotoVersion}`} alt="Photo de profil" /> : <b>{expert.name.slice(0, 1).toUpperCase()}</b>}<strong>{expert.name}{isVerifiedExpert && <i>✓</i>}</strong><span>{isVerifiedExpert ? expert.trade : "Compte privé"}</span><small>{expert.area}</small></div>
@@ -473,7 +473,7 @@ export default function ExpertWorkspace({ initialData }: { initialData: InitialD
             {messages.filter((message) => message.requestId === currentConversation.id).map((message) => <article className={message.senderType === "system" ? "system" : messageIsMine(message) ? "mine" : ""} key={message.id}><span>{message.senderName}</span><p>{message.body}</p><small>{dateTimeLabel(message.createdAt)}</small></article>)}
             {!messages.some((message) => message.requestId === currentConversation.id) && <p className="empty-thread">La mission est acceptée. Discutez du prix, du rendez-vous et de l’organisation du travail.</p>}
           </div>
-          {currentConversation.status === "completed" ? <div className="thread-completed"><BadgeCheck aria-hidden="true" /><p>Mission terminée. Vos échanges restent consultables.</p>{isOutgoingConversation && !reviewedRequestIds.includes(currentConversation.id) && <button type="button" onClick={() => { setMissionDetailOpen(true); go("missions"); }}>Laisser mon avis</button>}</div> : <>
+          {currentConversation.status === "completed" ? <div className="thread-completed"><BadgeCheck aria-hidden="true" /><div className="thread-completed-copy"><strong>Mission terminée</strong><p>Vos échanges restent consultables.</p></div>{isOutgoingConversation && !reviewedRequestIds.includes(currentConversation.id) && <button type="button" onClick={() => { setMissionDetailOpen(true); go("missions"); }}>Laisser mon avis</button>}</div> : <>
             {messageErrors[currentConversation.id] && <p className="mission-refresh-error" role="alert">{messageErrors[currentConversation.id]}</p>}
             <form onSubmit={sendMessage} key={currentConversation.id}><input aria-label="Votre message" name="content" minLength={2} maxLength={600} placeholder="Écrivez un message…" autoComplete="off" value={messageDrafts[currentConversation.id] || ""} onChange={(event) => { const value = event.target.value; setMessageDrafts((drafts) => ({ ...drafts, [currentConversation.id]: value })); }} required /><button disabled={Boolean(busy) || (messageDrafts[currentConversation.id] || "").trim().length < 2} aria-label={busy === `message-${currentConversation.id}` ? "Envoi en cours" : "Envoyer le message"}><Send aria-hidden="true" /></button></form>
           </>}

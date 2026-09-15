@@ -171,10 +171,10 @@ export default function SocialFeed({ initialData, query = "", mode = "network" }
   }
 
   return <>
-    <div className={`network-layout ${mode === "profile" ? "profile-mode" : ""}`}>
-      <aside className="network-sidebar">
+    <div className={`network-layout ${mode === "home" ? "home-feed-only" : ""} ${mode === "profile" ? "profile-mode" : ""}`}>
+      {mode !== "home" && <aside className="network-sidebar">
         <div className={`client-card ${authenticated ? "client-card-connected" : ""}`}><b aria-hidden="true">{authenticated ? "✓" : "♙"}</b><div><span>{authenticated ? `Bonjour ${customerName}` : "Espace professionnel"}</span><p>{authenticated ? "Votre compte expert est connecté : suivez, commentez et gardez vos contacts." : "Connectez votre compte expert pour participer au réseau et contacter d’autres professionnels."}</p></div>{authenticated ? <a href="/espace-expert?tab=profile">Ouvrir mon profil <i>→</i></a> : <button onClick={() => setShowAuth(true)}>Me connecter <i>→</i></button>}</div>
-      </aside>
+      </aside>}
 
       <section className="feed-column">
         {filteredPosts.slice(0, visiblePostCount).map((post) => <article className="social-post realization-card" id={`publication-${post.id}`} key={post.id}>

@@ -170,3 +170,6 @@
 .post-options-panel>button:hover{background:#edf3fb}
 .post-options-panel>button svg{width:18px;height:18px}
 .post-options>summary:focus-visible{outline:3px solid #267adf;outline-offset:-3px}
+/* Accueil : fil public sans carte de bienvenue expert. */
+.network-layout.home-feed-only,.professional-home .network-layout.home-feed-only{grid-template-columns:minmax(0,650px) 250px}
+@media(max-width:1050px){.network-layout.home-feed-only,.professional-home .network-layout.home-feed-only{grid-template-columns:minmax(0,650px)}}

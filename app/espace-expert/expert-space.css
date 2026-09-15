@@ -714,3 +714,24 @@
 .missions-organized :is(button,input):focus-visible{outline:3px solid #267adf;outline-offset:2px}
 .missions-show-completed{width:100%;min-height:44px;margin-top:10px;border:1px solid #0866df;border-radius:8px;background:white;color:#0866df;font-size:13px;cursor:pointer}
 .mission-card-top .declined,.mission-card-top .cancelled{background:#f2f3f5;color:#667085}
+/* Alignement avec la capture Missions validée. */
+.missions-organized{background:#f5f9ff;padding:16px;border-radius:0}
+.missions-organized .mission-list>header h2{font-size:28px;font-weight:500;letter-spacing:-.04em}
+.missions-organized .mission-list>header p{font-size:15px;line-height:1.5;margin:4px 0 16px}
+.mission-overview{gap:8px;margin-bottom:16px}
+.mission-overview button{min-height:90px;grid-template-columns:20px minmax(0,1fr);grid-template-rows:auto auto;align-items:center;column-gap:6px;row-gap:4px;padding:14px 10px;border-radius:16px;box-shadow:0 5px 16px #18324c05}
+.mission-overview button>svg{grid-row:1/3;width:20px;height:20px}
+.mission-overview button>strong{font-size:24px;text-align:left;align-self:end}
+.mission-overview button>span{font-size:13px;font-weight:700;text-align:left;align-self:start}
+.mission-overview .new{color:#de8300}.mission-overview .completed{color:#159f6b}
+.mission-search{min-height:56px;border-radius:12px;padding:10px 14px;margin-bottom:12px}
+.missions-organized .mission-filters{gap:8px;padding-bottom:14px}
+.missions-organized .mission-filters button{display:flex;align-items:center;justify-content:center;gap:6px;min-height:50px;font-size:13px;font-weight:700;border:1px solid #d9e3ef;border-radius:10px;background:#f8fbff;color:#18324c}
+.missions-organized .mission-filters button svg{width:18px;height:18px;flex-shrink:0}
+.missions-organized .mission-filters button.active{background:#0866df;border-color:#0866df;color:white}
+.missions-organized .missions-empty{padding:52px 22px 28px;gap:20px;border-radius:18px}
+.missions-organized .missions-empty>svg{width:110px;height:110px;padding:28px;margin:12px 0 8px}
+.missions-organized .missions-empty h3{font-size:23px;font-weight:500;line-height:1.4}
+.missions-organized .missions-empty p{font-size:15px;line-height:1.65}
+.missions-organized .missions-empty button{min-height:52px;padding:12px 22px;border-radius:11px;font-size:14px;font-weight:700}
+@media(max-width:380px){.missions-organized{padding:10px}.mission-overview button{padding:10px 6px;column-gap:4px}.mission-overview button>span{font-size:11px}.missions-organized .mission-filters button{gap:4px;font-size:11px}.missions-organized .missions-empty{padding-inline:16px}}

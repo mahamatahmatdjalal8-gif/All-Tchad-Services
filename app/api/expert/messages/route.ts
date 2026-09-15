@@ -1,54 +1,39 @@
-import { and, asc, desc, eq, isNotNull, isNull, or } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import { getDb } from "../../../../db";
-import { artisanApplications, requestMessages, serviceRequests } from "../../../../db/schema";
+import { requestMessages, serviceRequests } from "../../../../db/schema";
 import { getExpertContext } from "../../../social-auth";
 import { createNotification } from "../../../notification-service";
-import { createTrackingReference } from "../../../tracking-reference";
-
-const clean = (value: unknown, max = 600) => typeof value === "string" ? value.trim().slice(0, max) : "";
+import { canSendMissionMessage, hasMissionConversation, isMissionParticipant, ownedServiceMissions, withoutAccessCode } from "../../../mission-access";
 
 export async function GET() {
   const context = await getExpertContext();
-  if (!context) return Response.json({ error: "Accès expert refusé." }, { status: 403 });
-  const ownership = or(eq(serviceRequests.requesterExpertId, context.expert.id), eq(serviceRequests.targetExpertId, context.expert.id), and(isNull(serviceRequests.targetExpertId), eq(serviceRequests.assignedArtisan, context.expert.name)));
-  const requests = await getDb().select().from(serviceRequests).where(and(isNotNull(serviceRequests.requesterExpertId), ownership)).orderBy(asc(serviceRequests.createdAt)).limit(100);
-  const requestIds = new Set(requests.map((item) => item.id));
-  const allMessages = await getDb().select().from(requestMessages).orderBy(asc(requestMessages.createdAt)).limit(1000);
-  return Response.json({ requests, messages: allMessages.filter((message) => requestIds.has(message.requestId)) });
+  if (!context) return Response.json({ error: "Connectez-vous pour consulter vos discussions." }, { status: 401 });
+  const db = getDb();
+  const requests = await db.select().from(serviceRequests).where(ownedServiceMissions(context.expert.id)).orderBy(desc(serviceRequests.createdAt)).limit(200);
+  const ids = requests.filter(hasMissionConversation).map((item) => item.id);
+  const messages = ids.length ? await db.select().from(requestMessages).where(inArray(requestMessages.requestId, ids)).orderBy(desc(requestMessages.createdAt), desc(requestMessages.id)).limit(1000) : [];
+  return Response.json({ requests: requests.map(withoutAccessCode), messages: messages.reverse() }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function POST(request: Request) {
   const context = await getExpertContext();
-  if (!context) return Response.json({ error: "Accès expert refusé." }, { status: 403 });
+  if (!context) return Response.json({ error: "Connectez-vous pour envoyer un message." }, { status: 401 });
   const body = await request.json().catch(() => ({})) as Record<string, unknown>;
   const requestId = Number(body.requestId);
-  const content = clean(body.content);
-  const targetExpertId = Number(body.targetExpertId);
-  if (content.length < 2) return Response.json({ error: "Message invalide." }, { status: 400 });
+  const content = typeof body.content === "string" ? body.content.trim() : "";
+  if (!Number.isInteger(requestId) || requestId < 1) return Response.json({ error: "Envoyez une demande de service. La conversation s’ouvrira après son acceptation." }, { status: 400 });
+  if (content.length < 2 || content.length > 600) return Response.json({ error: "Le message doit contenir entre 2 et 600 caractères." }, { status: 400 });
   const db = getDb();
-  if ((!Number.isInteger(requestId) || requestId < 1) && Number.isInteger(targetExpertId) && targetExpertId > 0) {
-    if (targetExpertId === context.expert.id) return Response.json({ error: "Choisissez un autre profil." }, { status: 409 });
-    const [target] = await db.select().from(artisanApplications).where(eq(artisanApplications.id, targetExpertId)).limit(1);
-    if (!target) return Response.json({ error: "Profil introuvable." }, { status: 404 });
-    const [recent] = await db.select({ createdAt: serviceRequests.createdAt }).from(serviceRequests).where(and(eq(serviceRequests.requestKind, "conversation"), eq(serviceRequests.requesterExpertId, context.expert.id), eq(serviceRequests.targetExpertId, targetExpertId))).orderBy(desc(serviceRequests.createdAt)).limit(1);
-    if (recent?.createdAt && Date.now() - new Date(recent.createdAt).getTime() < 30 * 1000) return Response.json({ error: "Cette conversation vient déjà d’être créée." }, { status: 429 });
-    const accountId = "account" in context && context.account ? context.account.id : null;
-    const [conversation] = await db.insert(serviceRequests).values({ accountId, requesterExpertId: context.expert.id, targetExpertId, requestKind: "conversation", reference: createTrackingReference("MSG"), customerName: context.expert.name, customerPhone: context.expert.phone, service: "Discussion privée", city: context.expert.area, district: target.area, urgency: "Normal", details: content, status: "assigned", assignedArtisan: target.name, expertDecision: "accepted" }).returning();
-    const [message] = await db.insert(requestMessages).values({ requestId: conversation.id, senderExpertId: context.expert.id, senderType: "expert", senderName: context.expert.name, body: content }).returning();
-    await createNotification({ requestId: conversation.id, recipientType: "expert", recipientId: target.id, kind: "expert_message", title: `Message de ${context.expert.name}`, body: content.slice(0, 140) });
-    return Response.json({ request: conversation, message }, { status: 201 });
+  const outcome = await db.transaction(async (tx) => {
+    const [mission] = await tx.select().from(serviceRequests).where(eq(serviceRequests.id, requestId)).for("update").limit(1);
+    if (!mission || !isMissionParticipant(mission, context.expert.id)) return { error: "Cette conversation ne vous appartient pas.", status: 403 } as const;
+    if (!canSendMissionMessage(mission)) return { error: "La discussion est disponible après acceptation, jusqu’à la fin de la mission.", status: 409 } as const;
+    const [message] = await tx.insert(requestMessages).values({ requestId, senderExpertId: context.expert.id, senderType: context.expert.status === "accepted" ? "expert" : "client", senderName: context.expert.name, body: content }).returning();
+    return { message, recipientId: mission.requesterExpertId === context.expert.id ? mission.targetExpertId : mission.requesterExpertId };
+  });
+  if ("error" in outcome) return Response.json({ error: outcome.error }, { status: outcome.status });
+  if (outcome.recipientId) {
+    await createNotification({ requestId, recipientType: "expert", recipientId: outcome.recipientId, kind: "mission_message", title: `Message de ${context.expert.name}`, body: content.slice(0, 140) }).catch(() => console.error("Message notification unavailable."));
   }
-  if (!Number.isInteger(requestId) || requestId < 1) return Response.json({ error: "Conversation invalide." }, { status: 400 });
-  const [mission] = await db.select().from(serviceRequests).where(eq(serviceRequests.id, requestId)).limit(1);
-  const isProvider = mission?.targetExpertId === context.expert.id || (!mission?.targetExpertId && mission?.assignedArtisan === context.expert.name);
-  const isRequester = mission?.requesterExpertId === context.expert.id;
-  if (!mission?.requesterExpertId || (!isProvider && !isRequester)) return Response.json({ error: "Cette conversation professionnelle ne vous appartient pas." }, { status: 403 });
-  const [message] = await db.insert(requestMessages).values({ requestId, senderExpertId: context.expert.id, senderType: "expert", senderName: context.expert.name, body: content }).returning();
-  let recipientId = isRequester ? mission.targetExpertId : mission.requesterExpertId;
-  if (isRequester && !recipientId && mission.assignedArtisan) {
-    const [provider] = await db.select({ id: artisanApplications.id }).from(artisanApplications).where(eq(artisanApplications.name, mission.assignedArtisan)).limit(1);
-    recipientId = provider?.id ?? null;
-  }
-  if (recipientId) await createNotification({ requestId, recipientType: "expert", recipientId, kind: "expert_message", title: `Message de ${context.expert.name}`, body: content.slice(0, 140) });
-  return Response.json({ message }, { status: 201 });
+  return Response.json({ message: outcome.message }, { status: 201 });
 }

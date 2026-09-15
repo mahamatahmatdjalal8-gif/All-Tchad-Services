@@ -3,6 +3,7 @@ import { getDb } from "../../../../db";
 import { expertPosts, serviceRequests } from "../../../../db/schema";
 import { getObjectStorage } from "../../../object-storage";
 import { getExpertContext } from "../../../social-auth";
+import { hasMissionConversation, isMissionParticipant } from "../../../mission-access";
 
 const imageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 
@@ -12,11 +13,11 @@ export async function GET(request: Request) {
   const requestedKind = url.searchParams.get("kind");
   const kind = requestedKind === "after" ? "after" : requestedKind === "problem" ? "problem" : "before";
   const expert = await getExpertContext();
-  if (!expert || expert.expert.status !== "accepted") return Response.json({ error: "Accès refusé." }, { status: 403 });
+  if (!expert) return Response.json({ error: "Accès refusé." }, { status: 403 });
   const id = requestedId;
   if (!Number.isInteger(id) || id < 1) return Response.json({ error: "Photo introuvable." }, { status: 404 });
   const [mission] = await getDb().select().from(serviceRequests).where(eq(serviceRequests.id, id)).limit(1);
-  if (!mission || mission.assignedArtisan !== expert.expert.name) return Response.json({ error: "Photo introuvable." }, { status: 404 });
+  if (!mission || !isMissionParticipant(mission, expert.expert.id)) return Response.json({ error: "Photo introuvable." }, { status: 404 });
   const key = kind === "after" ? mission.afterImageKey : kind === "problem" ? mission.problemImageKey : mission.beforeImageKey;
   if (!key) return Response.json({ error: "Photo introuvable." }, { status: 404 });
   const object = await getObjectStorage()?.get(key);
@@ -39,8 +40,9 @@ export async function POST(request: Request) {
   const image = value instanceof File && value.size > 0 ? value : null;
   if (!Number.isInteger(id) || id < 1 || !image || !imageTypes.has(image.type) || image.size > 8 * 1024 * 1024) return Response.json({ error: "Photo invalide ou supérieure à 8 Mo." }, { status: 400 });
   const db = getDb();
-  const [mission] = await db.select().from(serviceRequests).where(and(eq(serviceRequests.id, id), eq(serviceRequests.assignedArtisan, context.expert.name))).limit(1);
+  const [mission] = await db.select().from(serviceRequests).where(and(eq(serviceRequests.id, id), eq(serviceRequests.requestKind, "service"), eq(serviceRequests.targetExpertId, context.expert.id))).limit(1);
   if (!mission) return Response.json({ error: "Cette demande ne vous est pas attribuée." }, { status: 404 });
+  if (!hasMissionConversation(mission)) return Response.json({ error: "Acceptez cette mission avant d’ajouter une photo." }, { status: 409 });
   const bucket = getObjectStorage();
   if (!bucket) return Response.json({ error: "Stockage indisponible." }, { status: 503 });
   const extension = image.type === "image/png" ? "png" : image.type === "image/webp" ? "webp" : "jpg";

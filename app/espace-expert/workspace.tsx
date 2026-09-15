@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { LayoutGrid, Plus, Search, Send, ArrowLeft, BadgeCheck, BarChart3, Bookmark, Briefcase, ChevronRight, CircleHelp, Clock, Eye, FileText, GraduationCap, Heart, Images, LogOut, Map, MapPin, MessageCircle, MoreHorizontal, Pencil, Settings, Share2, ShieldCheck, Star, Store, TrendingUp, UserRound, UsersRound, Wallet, Wrench } from "lucide-react";
 import PublicationPhoto from "./publication-photo";
@@ -22,8 +22,7 @@ type ServiceRequest = {
 };
 type Message = { id: number; requestId: number; senderExpertId: number | null; senderType: string; senderName: string; body: string; createdAt: string };
 type Review = { id: number; customerName: string; rating: number | null; details: string; createdAt: string };
-type Member = { id: number; name: string; status: string; trade: string; area: string };
-type InitialData = { expert: Expert; posts: Post[]; requests: ServiceRequest[]; outgoingRequests: ServiceRequest[]; messages: Message[]; reviews: Review[]; members: Member[]; followerCount: number; followingCount: number; favoriteCount: number };
+type InitialData = { expert: Expert; posts: Post[]; requests: ServiceRequest[]; outgoingRequests: ServiceRequest[]; messages: Message[]; reviews: Review[]; reviewedRequestIds?: number[]; followerCount: number; followingCount: number; favoriteCount: number };
 type Tab = "dashboard" | "edit-profile" | "missions" | "messages" | "posts" | "profile" | "settings" | "support";
 type ProfileSection = "overview" | "about" | "posts" | "reviews";
 type DashboardGroup = "activity" | "portfolio" | "progression" | "identity";
@@ -45,25 +44,19 @@ const conversationTime = (value: string) => { const date = new Date(value); cons
 const money = (value: number) => `${new Intl.NumberFormat("fr-FR").format(value)} FCFA`;
 const withPostMetrics = (post: Post): Post => ({ ...post, moderationStatus: post.moderationStatus || "published", comments: post.comments || [], viewCount: post.viewCount || 0, likeCount: post.likeCount || 0, commentCount: post.commentCount || 0, favoriteCount: post.favoriteCount || 0, shareCount: post.shareCount || 0 });
 
-const journeySteps = [
-  { title: "Demande", description: "Le besoin a été envoyé à l’expert." },
-  { title: "Discussion", description: "Échangez dans la messagerie interne." },
-  { title: "Acceptation", description: "L’expert confirme qu’il peut intervenir." },
-  { title: "Devis", description: "Le prix et le rendez-vous sont validés." },
-  { title: "Mission", description: "L’intervention peut commencer." },
-  { title: "Travail terminé", description: "Le résultat et les preuves sont enregistrés." },
-  { title: "Avis", description: "Le demandeur note le service réalisé." },
-];
+const hasConversation = (request: ServiceRequest, accountId: number) =>
+  request.requestKind === "service" && request.expertDecision === "accepted" &&
+  ["assigned", "in_progress", "completed"].includes(request.status) &&
+  Boolean(request.requesterExpertId && request.targetExpertId) &&
+  (request.requesterExpertId === accountId || request.targetExpertId === accountId);
 
-function getJourneyState(request: ServiceRequest, requestMessages: Message[]) {
-  const discussionStarted = requestMessages.some((message) => message.senderType !== "system");
-  const accepted = request.expertDecision === "accepted";
-  const quoteAccepted = request.quoteStatus === "accepted";
-  const missionStarted = request.status === "in_progress" || request.status === "completed";
-  const workCompleted = request.status === "completed";
-  const done = [true, discussionStarted || accepted, accepted, quoteAccepted, missionStarted, workCompleted, false];
-  const current = Math.max(0, done.findIndex((stepDone) => !stepDone));
-  return { done, current };
+const requestState = (request: ServiceRequest) => request.expertDecision === "declined" ? "Mission refusée" : request.status === "cancelled" ? "Mission annulée" : request.status === "completed" ? "Mission terminée" : request.expertDecision === "accepted" ? "Mission acceptée" : "En attente de réponse";
+
+async function requestJson(url: string, options: RequestInit = {}) {
+  const response = await fetch(url, { ...options, signal: AbortSignal.timeout(20000) });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || "Action impossible. Réessayez.");
+  return result;
 }
 
 export default function ExpertWorkspace({ initialData }: { initialData: InitialData }) {
@@ -75,7 +68,7 @@ export default function ExpertWorkspace({ initialData }: { initialData: InitialD
   const [posts, setPosts] = useState(initialData.posts);
   const [messages, setMessages] = useState(initialData.messages);
   const [tab, setTab] = useState<Tab>("profile");
-  const [activeRequest, setActiveRequest] = useState(initialData.requests.find((item) => item.requesterExpertId)?.id ?? initialData.outgoingRequests?.[0]?.id ?? initialData.requests[0]?.id ?? 0);
+  const [activeRequest, setActiveRequest] = useState(initialData.requests[0]?.id ?? initialData.outgoingRequests?.[0]?.id ?? 0);
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
   const [postType, setPostType] = useState("work");
@@ -94,9 +87,16 @@ export default function ExpertWorkspace({ initialData }: { initialData: InitialD
   const [composerOpen, setComposerOpen] = useState(false);
   const [postView, setPostView] = useState<"list" | "grid">("list");
   const [messageSearch, setMessageSearch] = useState("");
-  const [messageFilter, setMessageFilter] = useState<"all" | "unread">("all");
-  const [newConversationOpen, setNewConversationOpen] = useState(false);
   const [mobileThreadOpen, setMobileThreadOpen] = useState(false);
+  const [messageDrafts, setMessageDrafts] = useState<Record<number, string>>({});
+  const [messageErrors, setMessageErrors] = useState<Record<number, string>>({});
+  const [reviewedRequestIds, setReviewedRequestIds] = useState(initialData.reviewedRequestIds || []);
+  const [refreshError, setRefreshError] = useState("");
+  const mutationPending = useRef(false);
+  const mutationVersion = useRef(0);
+  const messageListRef = useRef<HTMLDivElement>(null);
+  const pageInitialized = useRef(false);
+  const waitingRequest = useRef<number | null>(null);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [missionSearch, setMissionSearch] = useState("");
   const [missionDetailOpen, setMissionDetailOpen] = useState(false);
@@ -106,12 +106,13 @@ export default function ExpertWorkspace({ initialData }: { initialData: InitialD
   const [dashboardGroup, setDashboardGroup] = useState<DashboardGroup>("activity");
   const [dashboardPanel, setDashboardPanel] = useState<DashboardPanel>(null);
 
-  const conversationRequests = useMemo(() => [...requests.filter((request) => request.requesterExpertId), ...outgoingRequests.filter((outgoing) => !requests.some((incoming) => incoming.id === outgoing.id))], [requests, outgoingRequests]);
-  const currentRequest = conversationRequests.find((item) => item.id === activeRequest);
-  const currentJourney = currentRequest ? getJourneyState(currentRequest, messages.filter((message) => message.requestId === currentRequest.id)) : null;
+  const allMissions = useMemo(() => [...requests, ...outgoingRequests.filter((outgoing) => !requests.some((incoming) => incoming.id === outgoing.id))].filter((request) => request.requestKind === "service"), [requests, outgoingRequests]);
+  const conversationRequests = useMemo(() => allMissions.filter((request) => hasConversation(request, expert.id)), [allMissions, expert.id]);
+  const currentRequest = allMissions.find((item) => item.id === activeRequest);
+  const currentConversation = conversationRequests.find((item) => item.id === activeRequest);
   const isOutgoingConversation = Boolean(currentRequest?.requesterExpertId === expert.id);
   const conversationPartner = (request: ServiceRequest) => request.requesterExpertId === expert.id ? request.assignedArtisan || "Expert" : request.customerName;
-  const messageIsMine = (message: Message) => message.senderExpertId ? message.senderExpertId === expert.id : message.senderType === "expert";
+  const messageIsMine = (message: Message) => message.senderExpertId === expert.id;
   const completed = requests.filter((item) => item.status === "completed").length;
   const active = requests.filter((item) => item.status === "assigned" || item.status === "in_progress").length;
   const awaitingDecision = requests.filter((item) => item.expertDecision === "pending" && item.status !== "cancelled").length;
@@ -131,16 +132,15 @@ export default function ExpertWorkspace({ initialData }: { initialData: InitialD
   const allConversations = useMemo(() => conversationRequests.map((request) => {
     const thread = messages.filter((message) => message.requestId === request.id);
     const lastMessage = thread.at(-1);
-    return { request, thread, lastMessage, unread: Boolean(lastMessage && !messageIsMine(lastMessage) && lastMessage.senderType !== "system") };
-  }), [conversationRequests, messages]);
-  const conversations = useMemo(() => allConversations.filter(({ request, unread }) => {
+    return { request, thread, lastMessage };
+  }).sort((a, b) => Date.parse(b.lastMessage?.createdAt || b.request.updatedAt) - Date.parse(a.lastMessage?.createdAt || a.request.updatedAt)), [conversationRequests, messages]);
+  const conversations = useMemo(() => allConversations.filter(({ request }) => {
     const term = messageSearch.trim().toLocaleLowerCase("fr");
     const matchesSearch = !term || `${conversationPartner(request)} ${request.service} ${request.district}`.toLocaleLowerCase("fr").includes(term);
-    return matchesSearch && (messageFilter === "all" || unread);
-  }), [allConversations, messageSearch, messageFilter]);
-  const unreadConversationCount = allConversations.filter((conversation) => conversation.unread).length;
+    return matchesSearch;
+  }), [allConversations, messageSearch, expert.id]);
   const missionGroup = (item: ServiceRequest) => item.expertDecision === "declined" ? "declined" : item.status === "cancelled" ? "cancelled" : item.status === "completed" ? "completed" : item.status === "in_progress" ? "in_progress" : item.expertDecision === "pending" ? "new" : "accepted";
-  const filteredMissions = requests.filter((item) => (missionFilter === "all" || missionGroup(item) === missionFilter) && [item.service, item.customerName, item.district, item.city, item.reference].join(" ").toLocaleLowerCase("fr").includes(missionSearch.trim().toLocaleLowerCase("fr")));
+  const filteredMissions = allMissions.filter((item) => (missionFilter === "all" || missionGroup(item) === missionFilter) && [item.service, conversationPartner(item), item.district, item.city, item.reference].join(" ").toLocaleLowerCase("fr").includes(missionSearch.trim().toLocaleLowerCase("fr")));
   const urgentMissions = requests.filter((item) => item.urgency.toLowerCase().includes("urgent") && !["completed", "cancelled"].includes(item.status));
   const scheduledMissions = requests.filter((item) => item.scheduledFor && !["completed", "cancelled"].includes(item.status)).sort((a, b) => Date.parse(a.scheduledFor || "") - Date.parse(b.scheduledFor || ""));
   const startOfWeek = new Date(); startOfWeek.setDate(startOfWeek.getDate() - 7);
@@ -158,33 +158,74 @@ export default function ExpertWorkspace({ initialData }: { initialData: InitialD
   const topPosts = [...posts].sort((a, b) => ((b.viewCount || 0) + ((b.likeCount || 0) + (b.commentCount || 0) + (b.favoriteCount || 0) + (b.shareCount || 0)) * 3) - ((a.viewCount || 0) + ((a.likeCount || 0) + (a.commentCount || 0) + (a.favoriteCount || 0) + (a.shareCount || 0)) * 3)).slice(0, 3);
 
   useEffect(() => {
+    if (pageInitialized.current) return;
     const frame = window.requestAnimationFrame(() => {
+      pageInitialized.current = true;
       const params = new URLSearchParams(window.location.search);
       const requestedTab = params.get("tab") as Tab | null;
       if (requestedTab && ["dashboard", "edit-profile", "missions", "messages", "posts", "profile", "settings", "support"].includes(requestedTab)) setTab(requestedTab);
       const requestedType = params.get("type");
       if (requestedType && postOptions.some((option) => option.id === requestedType)) { setPostType(requestedType); setTab("posts"); }
       const requestedRequest = Number(params.get("request"));
-      if (Number.isInteger(requestedRequest) && conversationRequests.some((item) => item.id === requestedRequest)) { setActiveRequest(requestedRequest); setMobileThreadOpen(true); setMissionDetailOpen(true); }
+      if (Number.isInteger(requestedRequest) && allMissions.some((item) => item.id === requestedRequest)) {
+        setActiveRequest(requestedRequest);
+        setMissionDetailOpen(true);
+        const selected = allMissions.find((item) => item.id === requestedRequest)!;
+        if (requestedTab === "messages" && hasConversation(selected, expert.id)) setMobileThreadOpen(true);
+        else if (requestedTab === "messages") setTab("missions");
+      }
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [conversationRequests]);
+  }, [allMissions, expert.id]);
 
   useEffect(() => {
-    if (tab !== "messages") return;
+    if (tab !== "messages" && tab !== "missions") return;
     let active = true;
+    let refreshing = false;
     const refresh = async () => {
-      const response = await fetch("/api/expert/messages");
-      if (!response.ok || !active) return;
-      const result = await response.json();
-      const refreshed = (result.requests || []) as ServiceRequest[];
-      setOutgoingRequests(refreshed);
-      setMessages(result.messages || []);
+      if (refreshing || mutationPending.current || document.visibilityState === "hidden") return;
+      refreshing = true;
+      const version = mutationVersion.current;
+      try {
+        const result = await requestJson("/api/expert/messages", { cache: "no-store" });
+        if (!active || mutationPending.current || mutationVersion.current !== version) return;
+        if (!Array.isArray(result.requests) || !Array.isArray(result.messages)) throw new Error("Réponse incomplète.");
+        const refreshed = result.requests as ServiceRequest[];
+        setRequests(refreshed.filter((request) => request.targetExpertId === expert.id));
+        setOutgoingRequests(refreshed.filter((request) => request.requesterExpertId === expert.id));
+        setMessages(result.messages);
+        setRefreshError("");
+      } catch {
+        if (active) setRefreshError("Actualisation interrompue. Nouvelle tentative automatique…");
+      } finally { refreshing = false; }
     };
     refresh();
     const timer = window.setInterval(refresh, 10000);
-    return () => { active = false; window.clearInterval(timer); };
-  }, [tab, expert.id, expert.name]);
+    document.addEventListener("visibilitychange", refresh);
+    return () => { active = false; window.clearInterval(timer); document.removeEventListener("visibilitychange", refresh); };
+  }, [tab, expert.id]);
+
+  useEffect(() => {
+    if (tab !== "missions" || !missionDetailOpen || currentRequest?.requesterExpertId !== expert.id) {
+      waitingRequest.current = null;
+      return;
+    }
+    if (currentRequest.expertDecision === "pending" && currentRequest.status !== "cancelled") waitingRequest.current = currentRequest.id;
+    else if (waitingRequest.current === currentRequest.id && hasConversation(currentRequest, expert.id)) {
+      waitingRequest.current = null;
+      setMobileThreadOpen(true);
+      setTab("messages");
+      setNotice("Votre mission a été acceptée. Vous pouvez maintenant discuter avec l’expert.");
+    }
+  }, [currentRequest, expert.id, missionDetailOpen, tab]);
+
+  const lastVisibleMessageId = messages.filter((message) => message.requestId === activeRequest).at(-1)?.id;
+  useEffect(() => {
+    if (tab === "messages" && currentConversation) {
+      const list = messageListRef.current;
+      if (list) list.scrollTop = list.scrollHeight;
+    }
+  }, [activeRequest, lastVisibleMessageId, tab, mobileThreadOpen]);
 
   useEffect(() => {
     setMissionView("journey");
@@ -193,52 +234,52 @@ export default function ExpertWorkspace({ initialData }: { initialData: InitialD
 
   const go = (next: Tab) => { setProfileMenuOpen(false); setTab(next); setNotice(""); window.scrollTo({ top: 0, behavior: "smooth" }); };
   const openProfileSection = (section: ProfileSection) => { setProfileSection(section); go("profile"); };
-  const continueMissionJourney = () => {
-    if (!currentRequest || !currentJourney) return;
-    if (currentJourney.current === 1) {
-      setMobileThreadOpen(true);
-      go("messages");
-      return;
-    }
-    if (currentJourney.current === 3) {
-      setMissionView("quote");
-      window.scrollTo({ top: 0, behavior: "smooth" });
-      return;
-    }
-    if (currentJourney.current === 5) {
-      setMissionView("proofs");
-      setProofKind(currentRequest.beforeImageKey ? "after" : "before");
-      window.scrollTo({ top: 0, behavior: "smooth" });
-      return;
-    }
-    document.getElementById("mission-next-action")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  const openConversation = (request: ServiceRequest) => {
+    if (!hasConversation(request, expert.id)) return;
+    setActiveRequest(request.id);
+    setMobileThreadOpen(true);
+    go("messages");
   };
-  const replaceRequest = (updated: ServiceRequest) => setRequests((current) => current.map((item) => item.id === updated.id ? updated : item));
+  const replaceRequest = (updated: ServiceRequest) => {
+    setRequests((current) => current.map((item) => item.id === updated.id ? updated : item));
+    setOutgoingRequests((current) => current.map((item) => item.id === updated.id ? updated : item));
+  };
 
   async function outgoingServiceAction(action: "accept_quote" | "reject_quote" | "cancel") {
-    if (!currentRequest || currentRequest.requesterExpertId !== expert.id) return;
+    if (!currentRequest || currentRequest.requesterExpertId !== expert.id || mutationPending.current) return;
+    const requestId = currentRequest.id;
+    mutationPending.current = true;
+    mutationVersion.current++;
     setBusy(`outgoing-${action}`); setNotice("");
-    const response = await fetch("/api/expert/service-request", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ requestId: currentRequest.id, action }) });
-    const result = await response.json().catch(() => ({}));
-    if (response.ok) {
-      setOutgoingRequests((current) => current.map((item) => item.id === result.request.id ? result.request : item));
-      if (result.message) setMessages((current) => [...current, result.message]);
-    } else setNotice(result.error || "Action impossible.");
-    setBusy("");
+    try {
+      const result = await requestJson("/api/expert/service-request", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ requestId, action }) });
+      if (result.request?.id !== requestId) throw new Error("Réponse incomplète. Actualisez la mission.");
+      replaceRequest(result.request);
+      if (result.message) setMessages((current) => current.some((message) => message.id === result.message.id) ? current : [...current, result.message]);
+      if (action === "cancel") { setMissionDetailOpen(true); go("missions"); }
+      setNotice(action === "cancel" ? "Demande annulée." : action === "accept_quote" ? "Devis accepté." : "Devis refusé. Vous pouvez préciser votre besoin dans la discussion.");
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Action impossible. Réessayez."); }
+    finally { mutationPending.current = false; setBusy(""); }
   }
 
   async function missionAction(action: string, payload: Record<string, unknown> = {}) {
-    if (!currentRequest) return false;
+    if (!currentRequest || currentRequest.targetExpertId !== expert.id || mutationPending.current) return false;
+    const requestId = currentRequest.id;
+    mutationPending.current = true;
+    mutationVersion.current++;
     setBusy(`mission-${action}`); setNotice("");
-    const response = await fetch("/api/expert/requests", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: currentRequest.id, action, ...payload }) });
-    const result = await response.json();
-    if (response.ok) {
+    try {
+      const result = await requestJson("/api/expert/requests", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: requestId, action, ...payload }) });
+      if (result.request?.id !== requestId) throw new Error("Réponse incomplète. Actualisez la mission.");
       replaceRequest(result.request);
-      if (result.message) setMessages((current) => [...current, result.message]);
-      setNotice(action === "accept" ? "Mission acceptée. Préparez maintenant le devis." : action === "decline" ? (currentRequest.requesterExpertId ? "Refus envoyé dans la conversation." : "Refus enregistré. L’administration pourra affecter un autre expert.") : action === "quote" ? (currentRequest.requesterExpertId ? "Devis envoyé dans la conversation." : "Devis enregistré. Contactez le client par téléphone pour obtenir son accord.") : action === "confirm_quote" ? "Accord du client enregistré." : action === "start" ? "Intervention démarrée." : currentRequest.requesterExpertId ? "Intervention terminée." : "Intervention terminée. Le client peut maintenant vous noter.");
-    } else setNotice(result.error || "Action impossible.");
-    setBusy("");
-    return response.ok;
+      if (result.message) setMessages((current) => current.some((message) => message.id === result.message.id) ? current : [...current, result.message]);
+      if (action === "accept") openConversation(result.request);
+      setNotice(action === "accept" ? "Mission acceptée. Organisez l’intervention dans cette conversation." : action === "decline" ? "Refus enregistré. Le client peut choisir un autre expert." : action === "quote" ? "Devis envoyé dans la conversation." : action === "complete" ? "Mission terminée. Le client peut maintenant laisser son avis." : "Mission mise à jour.");
+      return true;
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Action impossible. Réessayez.");
+      return false;
+    } finally { mutationPending.current = false; setBusy(""); }
   }
 
   async function submitQuote(event: FormEvent<HTMLFormElement>) {
@@ -268,18 +309,39 @@ export default function ExpertWorkspace({ initialData }: { initialData: InitialD
   }
 
   async function sendMessage(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); const form = event.currentTarget; setBusy("message");
-    const response = await fetch("/api/expert/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ requestId: activeRequest, content: new FormData(form).get("content") }) }); const result = await response.json();
-    if (response.ok) { setMessages((current) => [...current, result.message]); form.reset(); } else setNotice(result.error || "Message impossible."); setBusy("");
+    event.preventDefault();
+    if (!currentConversation || currentConversation.status === "completed" || mutationPending.current) return;
+    const requestId = currentConversation.id;
+    const content = (messageDrafts[requestId] || "").trim();
+    if (content.length < 2) return;
+    mutationPending.current = true;
+    mutationVersion.current++;
+    setBusy(`message-${requestId}`);
+    setMessageErrors((current) => ({ ...current, [requestId]: "" }));
+    try {
+      const result = await requestJson("/api/expert/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ requestId, content }) });
+      if (result.message?.requestId !== requestId) throw new Error("L’envoi n’a pas pu être confirmé. Vérifiez la conversation avant de réessayer.");
+      setMessages((current) => current.some((message) => message.id === result.message.id) ? current : [...current, result.message]);
+      setMessageDrafts((current) => current[requestId]?.trim() === content ? { ...current, [requestId]: "" } : current);
+    } catch (error) {
+      setMessageErrors((current) => ({ ...current, [requestId]: error instanceof Error && error.name !== "TimeoutError" ? error.message : "Connexion interrompue. Votre texte est conservé ; vérifiez les derniers messages avant de réessayer." }));
+    } finally { mutationPending.current = false; setBusy(""); }
   }
 
-  async function startConversation(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); const form = event.currentTarget; const values = Object.fromEntries(new FormData(form)); setBusy("new-conversation"); setNotice("");
-    const response = await fetch("/api/expert/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ targetExpertId: Number(values.targetExpertId), content: values.content }) });
-    const result = await response.json().catch(() => ({}));
-    if (response.ok) { setOutgoingRequests((current) => [result.request, ...current]); setMessages((current) => [...current, result.message]); setActiveRequest(result.request.id); setNewConversationOpen(false); setMobileThreadOpen(true); form.reset(); }
-    else setNotice(result.error || "Conversation impossible à créer.");
-    setBusy("");
+  async function submitReview(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!currentRequest || currentRequest.requesterExpertId !== expert.id || currentRequest.status !== "completed" || mutationPending.current) return;
+    const requestId = currentRequest.id;
+    const values = new FormData(event.currentTarget);
+    mutationPending.current = true;
+    mutationVersion.current++;
+    setBusy(`review-${requestId}`); setNotice("");
+    try {
+      await requestJson("/api/feedback", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "review", requestId, rating: Number(values.get("rating")), details: values.get("details") }) });
+      setReviewedRequestIds((current) => [...new Set([...current, requestId])]);
+      setNotice("Merci, votre avis a été enregistré.");
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Avis impossible à enregistrer. Votre texte est conservé."); }
+    finally { mutationPending.current = false; setBusy(""); }
   }
 
   async function persistProfile(nextAvailability = availability) {
@@ -341,63 +403,85 @@ export default function ExpertWorkspace({ initialData }: { initialData: InitialD
       </header>}
       {notice && <p className="space-notice">{notice}</p>}
 
-      {tab === "missions" && <section className="missions-layout missions-organized">
-        <aside className="mission-list"><header><h2>Mes missions</h2><p>Vos interventions, étape par étape</p></header>
-          <div className="mission-overview">{([['new','À traiter'],['in_progress','En cours'],['completed','Terminées']] as const).map(([value,label]) => <button type="button" key={value} className={value} onClick={() => setMissionFilter(value)}>{value === "new" ? <FileText aria-hidden="true" /> : value === "in_progress" ? <Clock aria-hidden="true" /> : <BadgeCheck aria-hidden="true" />}<strong>{requests.filter((item) => missionGroup(item) === value).length}</strong><span>{label}</span></button>)}</div>
+      {tab === "missions" && <section className="missions-layout missions-organized mission-service-flow">
+        <aside className="mission-list">
+          <header><h2>Mes missions</h2><p>Votre demande, la discussion et le service réalisé.</p></header>
+          {refreshError && <p className="mission-refresh-error" role="status">{refreshError}</p>}
+          <div className="mission-overview">{([['new','En attente'],['in_progress','En cours'],['completed','Terminées']] as const).map(([value,label]) => <button type="button" key={value} className={value} onClick={() => setMissionFilter(value)}>{value === "new" ? <FileText aria-hidden="true" /> : value === "in_progress" ? <Clock aria-hidden="true" /> : <BadgeCheck aria-hidden="true" />}<strong>{allMissions.filter((item) => missionGroup(item) === value).length}</strong><span>{label}</span></button>)}</div>
           <label className="mission-search"><Search aria-hidden="true" /><input value={missionSearch} onChange={(event) => setMissionSearch(event.target.value)} placeholder="Rechercher une mission" aria-label="Rechercher une mission" /></label>
-          <nav className="mission-filters">{([['all','Toutes'],['new','Nouvelles'],['accepted','Acceptées'],['in_progress','En cours'],['completed','Terminées']] as const).map(([value,label]) => <button type="button" aria-pressed={missionFilter === value} className={missionFilter === value ? "active" : ""} key={value} onClick={() => setMissionFilter(value)}>{value === "all" ? <LayoutGrid aria-hidden="true" /> : value === "new" ? <FileText aria-hidden="true" /> : value === "accepted" ? <UserRound aria-hidden="true" /> : value === "in_progress" ? <Clock aria-hidden="true" /> : <BadgeCheck aria-hidden="true" />}{label}</button>)}</nav>
-          {([['new','À traiter'],['accepted','Acceptées'],['in_progress','En cours'],['completed','Terminées'],['cancelled','Annulées'],['declined','Refusées']] as const).map(([group,label]) => { const items = filteredMissions.filter((item) => missionGroup(item) === group); return items.length > 0 && <section className="mission-card-group" key={group}><header><h3>{label}</h3><small>{items.length} mission{items.length > 1 ? "s" : ""}</small></header>{items.map((item) => <button type="button" className="organized-mission-card" key={item.id} onClick={() => { setActiveRequest(item.id); setMissionView("journey"); setMissionDetailOpen(true); }}><span className="mission-card-top"><small>{item.reference}</small><em className={group}>{({ new: "Nouvelle", accepted: "Acceptée", in_progress: "En cours", completed: "Terminée", cancelled: "Annulée", declined: "Refusée" })[group]}</em></span><strong>{item.service}</strong><span>{item.district} · {item.city}</span><small>{dateLabel(item.createdAt)} · {item.urgency}</small><span className="mission-card-link">{group === "new" ? "Voir la demande" : "Voir le détail"}<ChevronRight aria-hidden="true" /></span></button>)}</section>; })}
-          {missionFilter !== "completed" && requests.some((item) => item.status === "completed") && <button type="button" className="missions-show-completed" onClick={() => { setMissionFilter("completed"); setMissionSearch(""); }}>Voir les missions terminées</button>}
-          {!filteredMissions.length && <div className="missions-empty"><FileText aria-hidden="true" /><h3>{requests.length ? "Aucune mission trouvée" : "Aucune mission pour le moment"}</h3><p>{requests.length ? "Essayez un autre filtre ou une autre recherche." : "Les demandes qui vous sont attribuées apparaîtront ici."}</p><button type="button" onClick={() => { if (requests.length) { setMissionFilter("all"); setMissionSearch(""); } else go("profile"); }}>{requests.length ? "Afficher toutes les missions" : "Retour au profil"}</button></div>}
+          <nav className="mission-filters" aria-label="Filtrer les missions">{([['all','Toutes'],['new','En attente'],['accepted','Acceptées'],['in_progress','En cours'],['completed','Terminées']] as const).map(([value,label]) => <button type="button" aria-pressed={missionFilter === value} className={missionFilter === value ? "active" : ""} key={value} onClick={() => setMissionFilter(value)}>{value === "all" ? <LayoutGrid aria-hidden="true" /> : value === "new" ? <FileText aria-hidden="true" /> : value === "accepted" ? <UserRound aria-hidden="true" /> : value === "in_progress" ? <Clock aria-hidden="true" /> : <BadgeCheck aria-hidden="true" />}{label}</button>)}</nav>
+          {([['new','En attente de réponse'],['accepted','Acceptées'],['in_progress','En cours'],['completed','Terminées'],['cancelled','Annulées'],['declined','Refusées']] as const).map(([group,label]) => {
+            const items = filteredMissions.filter((item) => missionGroup(item) === group);
+            return items.length > 0 && <section className="mission-card-group" key={group}><header><h3>{label}</h3><small>{items.length} mission{items.length > 1 ? "s" : ""}</small></header>{items.map((item) => <button type="button" className="organized-mission-card" key={item.id} onClick={() => { setActiveRequest(item.id); setMissionView("journey"); setMissionDetailOpen(true); }}>
+              <span className="mission-card-top"><small>{item.reference}</small><em className={group}>{({ new: "En attente", accepted: "Acceptée", in_progress: "En cours", completed: "Terminée", cancelled: "Annulée", declined: "Refusée" })[group]}</em></span>
+              <strong>{item.service}</strong><span>{item.requesterExpertId === expert.id ? "Votre demande à" : "Demande de"} {conversationPartner(item)}</span><span>{item.district} · {item.city}</span><small>{dateLabel(item.createdAt)} · {item.urgency}</small><span className="mission-card-link">{group === "completed" && item.requesterExpertId === expert.id && !reviewedRequestIds.includes(item.id) ? "Laisser un avis" : group === "new" ? "Voir la demande" : "Suivre la mission"}<ChevronRight aria-hidden="true" /></span>
+            </button>)}</section>;
+          })}
+          {missionFilter !== "completed" && allMissions.some((item) => item.status === "completed") && <button type="button" className="missions-show-completed" onClick={() => { setMissionFilter("completed"); setMissionSearch(""); }}>Voir les missions terminées</button>}
+          {!filteredMissions.length && <div className="missions-empty"><FileText aria-hidden="true" /><h3>{allMissions.length ? "Aucune mission trouvée" : "Aucune mission pour le moment"}</h3><p>{allMissions.length ? "Essayez un autre filtre ou une autre recherche." : "Vos demandes envoyées et les missions reçues apparaîtront ici."}</p>{allMissions.length ? <button type="button" onClick={() => { setMissionFilter("all"); setMissionSearch(""); }}>Afficher toutes les missions</button> : <Link className="mission-primary-link" href="/experts">Trouver un expert</Link>}</div>}
         </aside>
-        <div className="mission-workspace" hidden={!missionDetailOpen || !currentRequest || !requests.some((item) => item.id === currentRequest.id)}><button type="button" className="mission-detail-back" onClick={() => setMissionDetailOpen(false)}>← Retour aux missions</button>{currentRequest ? <>
-          <header className="mission-header"><div><span>{currentRequest.requesterExpertId ? "Demande directe d’un expert" : currentRequest.reference}</span><h2>{currentRequest.service}</h2><p>{currentRequest.customerName} · {currentRequest.city}, {currentRequest.district} · {currentRequest.urgency}</p></div><em>{currentRequest.expertDecision === "pending" ? "Réponse attendue" : statusLabels[currentRequest.status]}</em></header>
-          {missionView === "journey" && currentJourney && <section className="mission-journey-card">
-            <header><span>Parcours de la demande</span><strong>Étape {currentJourney.current + 1} sur {journeySteps.length}</strong></header>
-            <div className="mission-journey-progress" aria-label={`Progression : étape ${currentJourney.current + 1} sur ${journeySteps.length}`}><i style={{ width: `${((currentJourney.current + 1) / journeySteps.length) * 100}%` }} /></div>
-            <div className="mission-current-step"><b>{currentJourney.current + 1}</b><span><small>Maintenant</small><strong>{journeySteps[currentJourney.current].title}</strong><p>{journeySteps[currentJourney.current].description}</p></span></div>
-            {currentJourney.current < 6 ? <button type="button" onClick={continueMissionJourney}>{currentJourney.current === 1 ? "Ouvrir la discussion" : currentJourney.current === 2 ? "Répondre à la demande" : currentJourney.current === 3 ? "Préparer le devis" : currentJourney.current === 4 ? "Gérer la mission" : "Ajouter les preuves"}<ChevronRight aria-hidden="true" /></button> : <p className="mission-review-wait"><Star aria-hidden="true" /> En attente de l’avis du demandeur</p>}
-            <details><summary>Voir toutes les étapes</summary><ul>{journeySteps.map((step, index) => <li className={currentJourney.done[index] ? "done" : index === currentJourney.current ? "active" : ""} key={step.title}><b>{currentJourney.done[index] ? "✓" : index + 1}</b><span><strong>{step.title}</strong><small>{step.description}</small></span></li>)}</ul></details>
-          </section>}
-          {missionView === "journey" && <section className="mission-need"><span>Besoin du client</span><p>{currentRequest.details}</p>{currentRequest.clientRequestedFor && <p><strong>Report demandé :</strong> {dateTimeLabel(currentRequest.clientRequestedFor)}</p>}{currentRequest.locationLat && currentRequest.locationLng && <a className="mission-map-link" href={`https://www.google.com/maps?q=${currentRequest.locationLat},${currentRequest.locationLng}`} target="_blank" rel="noreferrer">📍 Ouvrir la position du client</a>}{currentRequest.problemImageKey && <img className="client-problem-photo" src={`/api/expert/request-photos?id=${currentRequest.id}&kind=problem`} alt="Photo du problème envoyée par le client" />}</section>}
-
-          {missionView === "journey" && <section className="mission-actions" id="mission-next-action">
-            {currentRequest.expertDecision === "pending" && <div className="decision-panel"><div><span>Étape suivante</span><h3>Accepter cette mission ?</h3><p>Vérifiez le besoin et votre disponibilité avant de répondre.</p></div><button className="accept-mission" disabled={Boolean(busy)} onClick={() => missionAction("accept")}>✓ Accepter la mission</button><form onSubmit={declineMission}><input name="reason" minLength={3} maxLength={300} placeholder="Raison du refus…" required /><button disabled={Boolean(busy)}>Refuser</button></form></div>}
-            {currentRequest.expertDecision === "declined" && <div className="mission-state warning"><span>Mission refusée</span><p>{currentRequest.rejectionReason}. L’administration peut maintenant choisir un autre expert.</p></div>}
-            {currentRequest.expertDecision === "accepted" && currentRequest.status !== "completed" && <>
-              <div className={`mission-state quote-${currentRequest.quoteStatus}`}><span>{quoteLabels[currentRequest.quoteStatus]}</span>{currentRequest.quoteAmount > 0 && <strong>{money(currentRequest.quoteAmount)}</strong>}<p>{currentRequest.quoteStatus === "pending" ? (currentRequest.requesterExpertId ? "L’expert demandeur peut accepter ou refuser le devis dans la messagerie." : "Contactez le client par téléphone ou WhatsApp, puis confirmez son accord ici.") : currentRequest.quoteStatus === "accepted" ? "Le prix est validé. Respectez le montant annoncé." : currentRequest.quoteStatus === "rejected" ? (currentRequest.requesterExpertId ? "Discutez dans la messagerie puis envoyez un nouveau devis." : "Discutez avec le client puis envoyez un nouveau devis.") : "Annoncez le prix et l’heure d’arrivée avant de commencer."}</p>{currentRequest.scheduledFor && <small>Rendez-vous proposé : {dateTimeLabel(currentRequest.scheduledFor)}</small>}</div>
-              {currentRequest.quoteStatus === "pending" && !currentRequest.requesterExpertId && <button className="confirm-client-quote" disabled={Boolean(busy)} onClick={() => missionAction("confirm_quote")}>✓ J’ai reçu l’accord du client</button>}
-              {(currentRequest.quoteStatus === "not_sent" || currentRequest.quoteStatus === "rejected") && <button className="open-mission-wizard" type="button" onClick={() => setMissionView("quote")}>Préparer le devis <ChevronRight aria-hidden="true" /></button>}
-              {currentRequest.quoteStatus === "accepted" && currentRequest.status === "assigned" && !currentRequest.arrivedAt && <button className="arrive-mission" disabled={Boolean(busy)} onClick={() => missionAction("arrive")}>📍 Je suis arrivé chez le client</button>}
-              {currentRequest.quoteStatus === "accepted" && currentRequest.status === "assigned" && <button className="start-mission" disabled={Boolean(busy)} onClick={() => missionAction("start")}>▶ Démarrer l’intervention</button>}
-              {currentRequest.status === "in_progress" && <button className="complete-mission" disabled={Boolean(busy)} onClick={() => missionAction("complete")}>✓ Déclarer l’intervention terminée</button>}
-              {currentRequest.status === "in_progress" && <button className="open-proof-wizard" type="button" onClick={() => { setProofKind(currentRequest.beforeImageKey ? "after" : "before"); setMissionView("proofs"); }}>Ajouter les photos du travail <ChevronRight aria-hidden="true" /></button>}
+        <div className="mission-workspace" hidden={!missionDetailOpen || !currentRequest}>
+          <button type="button" className="mission-detail-back" onClick={() => setMissionDetailOpen(false)}>← Retour aux missions</button>
+          {currentRequest && <>
+            <header className="mission-header"><div><span>{currentRequest.reference} · {isOutgoingConversation ? "Demande envoyée" : "Mission reçue"}</span><h2>{currentRequest.service}</h2><p>{conversationPartner(currentRequest)} · {currentRequest.city}, {currentRequest.district}</p></div><em>{requestState(currentRequest)}</em></header>
+            {missionView === "journey" && <>
+              <section className="mission-need"><span>{isOutgoingConversation ? "Votre besoin" : "Besoin du client"}</span><p>{currentRequest.details}</p><small>Envoyée le {dateTimeLabel(currentRequest.createdAt)} · {currentRequest.urgency}</small>{currentRequest.clientRequestedFor && <p><strong>Date souhaitée :</strong> {dateTimeLabel(currentRequest.clientRequestedFor)}</p>}{currentRequest.locationLat && currentRequest.locationLng && <a className="mission-map-link" href={`https://www.google.com/maps?q=${currentRequest.locationLat},${currentRequest.locationLng}`} target="_blank" rel="noreferrer">Ouvrir la position du client</a>}{currentRequest.problemImageKey && <img className="client-problem-photo" src={`/api/expert/request-photos?id=${currentRequest.id}&kind=problem`} alt="Photo jointe à la demande" />}</section>
+              <section className="mission-actions" key={currentRequest.id}>
+                {currentRequest.expertDecision === "pending" && !["completed", "cancelled"].includes(currentRequest.status) && (isOutgoingConversation ? <div className="mission-state"><Clock aria-hidden="true" /><h3>En attente de la réponse de l’expert</h3><p>Dès qu’il accepte, votre conversation s’ouvre pour organiser le prix, le rendez-vous et l’intervention.</p><button className="mission-secondary-action" disabled={Boolean(busy)} onClick={() => outgoingServiceAction("cancel")}>Annuler la demande</button></div> : <div className="decision-panel"><h3>Accepter cette mission ?</h3><p>Après acceptation, vous pourrez discuter directement avec le client.</p><button className="accept-mission" disabled={Boolean(busy)} onClick={() => missionAction("accept")}>{busy === "mission-accept" ? "Acceptation…" : "Accepter et discuter"}</button><form onSubmit={declineMission}><label>Raison du refus<input name="reason" minLength={3} maxLength={300} placeholder="Indisponible, hors de ma zone…" required /></label><button className="mission-secondary-action" disabled={Boolean(busy)}>Refuser la mission</button></form></div>)}
+                {(currentRequest.expertDecision === "declined" || currentRequest.status === "cancelled") && <div className="mission-state warning"><h3>{requestState(currentRequest)}</h3><p>{currentRequest.rejectionReason || currentRequest.cancellationReason || "Cette demande n’est plus active."}</p>{isOutgoingConversation && <Link className="mission-primary-link" href="/experts">Choisir un autre expert</Link>}</div>}
+                {hasConversation(currentRequest, expert.id) && currentRequest.status !== "completed" && <div className="mission-state success"><h3>Votre conversation est ouverte</h3><p>Échangez sur le prix, le rendez-vous, le lieu et l’organisation du travail.</p><button type="button" onClick={() => openConversation(currentRequest)}><MessageCircle aria-hidden="true" />Ouvrir la conversation</button>{!isOutgoingConversation && <button className="complete-mission" disabled={Boolean(busy)} onClick={() => missionAction("complete")}>{busy === "mission-complete" ? "Enregistrement…" : "Terminer la mission"}</button>}</div>}
+                {currentRequest.status === "completed" && <div className="mission-state success"><h3>Mission terminée</h3>{currentRequest.completedAt && <p>Terminée le {dateLabel(currentRequest.completedAt)}.</p>}{currentRequest.quoteAmount > 0 && <p>Prix convenu : {money(currentRequest.quoteAmount)}</p>}{hasConversation(currentRequest, expert.id) && <button className="mission-secondary-action" type="button" onClick={() => openConversation(currentRequest)}>Relire la conversation</button>}{!isOutgoingConversation && <p>Le client peut maintenant laisser son avis.</p>}</div>}
+                {currentRequest.status === "completed" && isOutgoingConversation && (reviewedRequestIds.includes(currentRequest.id) ? <p className="mission-review-saved"><BadgeCheck aria-hidden="true" />Votre avis a été enregistré. Merci !</p> : <form className="mission-review-form" key={currentRequest.id} onSubmit={submitReview}><h3>Comment s’est passé le service ?</h3><label>Votre note<select name="rating" defaultValue="" required><option value="" disabled>Choisir une note</option><option value="5">★★★★★ — Excellent</option><option value="4">★★★★☆ — Bien</option><option value="3">★★★☆☆ — Correct</option><option value="2">★★☆☆☆ — Décevant</option><option value="1">★☆☆☆☆ — Très décevant</option></select></label><label>Votre avis<textarea name="details" minLength={5} maxLength={1000} rows={3} placeholder="Décrivez votre expérience avec cet expert…" required /></label><button disabled={Boolean(busy)}>{busy === `review-${currentRequest.id}` ? "Enregistrement…" : "Envoyer mon avis"}</button></form>)}
+              </section>
+              {!isOutgoingConversation && currentRequest.expertDecision === "accepted" && currentRequest.status !== "cancelled" && <details className="mission-optional-tools"><summary>Devis et photos de réalisation (facultatif)</summary><p>Vous pouvez conserver un devis ou publier des photos du travail avec l’accord du client.</p>{currentRequest.status !== "completed" && <button type="button" onClick={() => setMissionView("quote")}>Proposer un devis</button>}<button type="button" onClick={() => { setProofKind(currentRequest.beforeImageKey ? "after" : "before"); setMissionView("proofs"); }}>Photos avant / après</button></details>}
             </>}
-            {currentRequest.status === "completed" && <><div className="mission-state success"><span>Intervention terminée</span><strong>{money(currentRequest.quoteAmount)}</strong><p>Le client peut maintenant vous laisser une note.</p></div><button className="open-proof-wizard" type="button" onClick={() => { setProofKind(currentRequest.beforeImageKey ? "after" : "before"); setMissionView("proofs"); }}>Voir les preuves du travail <ChevronRight aria-hidden="true" /></button></>}
-          </section>}
+          {missionView === "quote" && !isOutgoingConversation && currentRequest.expertDecision === "accepted" && currentRequest.status !== "completed" && <section className="mission-wizard-screen">
+            <header className="mission-wizard-heading"><button type="button" onClick={() => setMissionView("journey")}>← Retour</button><div><span>Facultatif</span><h3>Proposer un prix</h3><p>Gardez une trace du prix convenu dans la discussion.</p></div></header>
 
-          {missionView === "quote" && <section className="mission-wizard-screen">
-            <header className="mission-wizard-heading"><button type="button" onClick={() => setMissionView("journey")}>← Retour</button><div><span>Étape 4 sur 7</span><h3>Proposer un prix</h3><p>Complétez le devis avant de poursuivre la mission.</p></div></header>
-            <div className="mission-wizard-progress"><i style={{ width: `${(4 / 7) * 100}%` }} /></div>
             <form className="quote-form mission-quote-wizard" onSubmit={submitQuote}><header><span>Devis simple</span><h3>Prix et rendez-vous</h3></header><div><label>Main-d’œuvre (FCFA)<input name="laborAmount" type="number" min="0" max="50000000" inputMode="numeric" defaultValue={currentRequest.laborAmount || ""} required /></label><label>Matériel (FCFA)<input name="materialAmount" type="number" min="0" max="50000000" inputMode="numeric" defaultValue={currentRequest.materialAmount || 0} required /></label></div><label>Matériel nécessaire<textarea name="materialsNeeded" maxLength={500} defaultValue={currentRequest.materialsNeeded || ""} placeholder="Câbles, tuyaux, pièces, quantité…" /></label><label>Détails du devis<textarea name="quoteDetails" minLength={5} maxLength={600} defaultValue={currentRequest.quoteDetails || ""} placeholder="Travail et matériel compris…" required /></label><label>Date et heure proposées<input name="scheduledFor" type="datetime-local" defaultValue={currentRequest.scheduledFor || currentRequest.clientRequestedFor || ""} /></label><div className="mission-wizard-actions"><button type="button" className="wizard-previous" onClick={() => setMissionView("journey")}>Retour</button><button disabled={Boolean(busy)}>Envoyer le devis <ChevronRight aria-hidden="true" /></button></div></form>
           </section>}
 
-          {missionView === "proofs" && currentRequest.expertDecision === "accepted" && <section className="mission-wizard-screen">
-            <header className="mission-wizard-heading"><button type="button" onClick={() => proofKind === "after" && !currentRequest.afterImageKey ? setProofKind("before") : setMissionView("journey")}>← Retour</button><div><span>Étape 6 sur 7 · Photo {proofKind === "before" ? "1" : "2"} sur 2</span><h3>{proofKind === "before" ? "Photo avant" : "Photo après"}</h3><p>{proofKind === "before" ? "Montrez clairement la situation avant l’intervention." : "Montrez le résultat obtenu après votre travail."}</p></div></header>
+          {missionView === "proofs" && !isOutgoingConversation && currentRequest.expertDecision === "accepted" && <section className="mission-wizard-screen">
+            <header className="mission-wizard-heading"><button type="button" onClick={() => proofKind === "after" && !currentRequest.afterImageKey ? setProofKind("before") : setMissionView("journey")}>← Retour</button><div><span>Facultatif · Photo {proofKind === "before" ? "1" : "2"} sur 2</span><h3>{proofKind === "before" ? "Photo avant" : "Photo après"}</h3><p>{proofKind === "before" ? "Montrez clairement la situation avant l’intervention." : "Montrez le résultat obtenu après votre travail."}</p></div></header>
             <div className="mission-wizard-progress"><i style={{ width: proofKind === "before" ? "50%" : "100%" }} /></div>
             <section className="mission-photos mission-proof-single">{(() => { const kind = proofKind; const hasImage = kind === "before" ? currentRequest.beforeImageKey : currentRequest.afterImageKey; return <form onSubmit={uploadMissionPhoto}><input type="hidden" name="kind" value={kind} />{hasImage ? <img src={`/api/expert/request-photos?id=${currentRequest.id}&kind=${kind}`} alt={`Photo ${kind === "before" ? "avant" : "après"}`} /> : <div className="photo-placeholder">{kind === "before" ? "Avant" : "Après"}</div>}<label>{hasImage ? "Remplacer la photo" : `Ajouter la photo ${kind === "before" ? "avant" : "après"}`}<input name="image" type="file" accept="image/jpeg,image/png,image/webp" required /></label><label className="public-photo-consent"><input name="publicConsent" type="checkbox" value="yes" required /><span>Le client autorise la publication publique de cette photo.</span></label><div className="mission-wizard-actions"><button type="button" className="wizard-previous" onClick={() => kind === "after" ? setProofKind("before") : setMissionView("journey")}>Retour</button><button disabled={Boolean(busy)}>{busy === `photo-${kind}` ? "Envoi…" : kind === "before" ? "Enregistrer et continuer" : "Enregistrer la photo"}<ChevronRight aria-hidden="true" /></button></div></form>; })()}<small>Après les deux photos, la réalisation devient publique. Ne montrez aucun visage, numéro ou adresse privée.</small>{currentRequest.beforeImageKey && currentRequest.afterImageKey && <button type="button" className="finish-proof-wizard" onClick={() => setMissionView("journey")}>Terminer et revenir à la mission ✓</button>}</section>
           </section>}
 
-        </> : <div className="choose-thread">Sélectionnez une mission.</div>}</div>
+          </>}
+        </div>
       </section>}
-
-      {tab === "messages" && <section className={`expert-messenger messenger-modern messenger-refreshed ${mobileThreadOpen ? "thread-open" : ""}`}>
-        <aside className="conversation-list"><header><div><strong>Discussions</strong><span>{unreadConversationCount > 0 ? `${unreadConversationCount} non lue${unreadConversationCount > 1 ? "s" : ""}` : "À jour"}</span></div><button type="button" className={newConversationOpen ? "active" : ""} aria-label="Nouvelle discussion" aria-expanded={newConversationOpen} onClick={() => setNewConversationOpen((open) => !open)}><Plus aria-hidden="true" /> Nouvelle discussion</button></header>{newConversationOpen && <form className="new-conversation-form" onSubmit={startConversation}><strong>Nouveau message</strong><label>Choisir un profil<select name="targetExpertId" required defaultValue=""><option value="" disabled>Sélectionner une personne</option>{initialData.members.map((member) => <option key={member.id} value={member.id}>{member.name} · {member.status === "accepted" ? "Expert vérifié" : "Membre"}</option>)}</select></label><label>Premier message<textarea name="content" minLength={2} maxLength={600} rows={3} placeholder="Écrivez votre message…" required /></label><div><button type="button" onClick={() => setNewConversationOpen(false)}>Annuler</button><button disabled={busy === "new-conversation"}>{busy === "new-conversation" ? "Envoi…" : "Envoyer"}</button></div></form>}<label className="conversation-search"><Search aria-hidden="true" /><input value={messageSearch} onChange={(event) => setMessageSearch(event.target.value)} placeholder="Rechercher une discussion" aria-label="Rechercher une discussion" /></label><nav aria-label="Filtrer les discussions"><button className={messageFilter === "all" ? "active" : ""} onClick={() => setMessageFilter("all")}>Toutes</button><button className={messageFilter === "unread" ? "active" : ""} onClick={() => setMessageFilter("unread")}>Non lues{unreadConversationCount > 0 && <b className="unread-total">{unreadConversationCount}</b>}</button></nav><div className="conversation-items">{conversations.map(({ request, lastMessage, unread }) => { const partner = conversationPartner(request); return <button className={activeRequest === request.id ? "active" : ""} key={request.id} onClick={() => { setActiveRequest(request.id); setMobileThreadOpen(true); }}><b>{partner.slice(0, 1).toUpperCase()}</b><span><strong>{partner}</strong><small>{lastMessage ? `${messageIsMine(lastMessage) ? "Vous : " : ""}${lastMessage.body}` : `${request.service} · Aucun message`}</small></span><time>{lastMessage ? conversationTime(lastMessage.createdAt) : ""}</time>{unread && <i aria-label="Message non lu" />}</button>; })}{!conversations.length && <div className="messenger-empty"><MessageCircle aria-hidden="true" /><strong>{messageSearch || messageFilter === "unread" ? "Aucune discussion trouvée" : "Votre première discussion commence ici"}</strong><p>{messageSearch ? "Essayez un autre nom ou effacez la recherche." : messageFilter === "unread" ? "Vous avez lu toutes vos discussions." : "Contactez un membre pour échanger sur votre projet."}</p>{!messageSearch && messageFilter === "all" && <button type="button" onClick={() => setNewConversationOpen(true)}><Plus aria-hidden="true" />Nouvelle discussion</button>}</div>}</div></aside>
-        <div className="expert-thread conversation-view">{currentRequest ? <><header><button type="button" className="thread-back" onClick={() => setMobileThreadOpen(false)} aria-label="Retour aux discussions"><ArrowLeft aria-hidden="true" /></button><b>{conversationPartner(currentRequest).slice(0, 1).toUpperCase()}</b><div><strong>{conversationPartner(currentRequest)}</strong><span>{currentRequest.requestKind === "conversation" ? "Discussion privée" : currentRequest.requesterExpertId ? "Collaboration entre experts" : currentRequest.service} · {currentRequest.district}</span></div>{!currentRequest.requesterExpertId && <button type="button" className="thread-more" aria-label="Informations sur la mission" onClick={() => go("missions")}>•••</button>}</header><div className="thread-date"><span>{dateLabel(currentRequest.createdAt)}</span></div>{isOutgoingConversation && currentRequest.requestKind !== "conversation" && <section className="collaboration-service-card"><div><span>{currentRequest.service}</span><strong>{currentRequest.status === "cancelled" ? "Demande annulée" : currentRequest.status === "completed" ? "Service terminé" : currentRequest.quoteStatus === "not_sent" ? "En attente de la réponse" : quoteLabels[currentRequest.quoteStatus]}</strong></div>{currentRequest.quoteAmount > 0 && <b>{money(currentRequest.quoteAmount)}</b>}{currentRequest.quoteStatus === "pending" && <div className="collaboration-quote-actions"><button disabled={Boolean(busy)} onClick={() => outgoingServiceAction("accept_quote")}>Accepter le devis</button><button disabled={Boolean(busy)} onClick={() => outgoingServiceAction("reject_quote")}>Refuser</button></div>}{!["completed", "cancelled"].includes(currentRequest.status) && <button className="collaboration-cancel" disabled={Boolean(busy)} onClick={() => outgoingServiceAction("cancel")}>Annuler la demande</button>}</section>}<div className="expert-message-list">{messages.filter((message) => message.requestId === currentRequest.id).map((message) => <article className={message.senderType === "system" ? "system" : messageIsMine(message) ? "mine" : ""} key={message.id}><span>{message.senderName}</span><p>{message.body}</p><small>{dateTimeLabel(message.createdAt)}</small></article>)}{!messages.some((message) => message.requestId === currentRequest.id) && <p className="empty-thread">Envoyez un premier message.</p>}</div><form onSubmit={sendMessage}><input aria-label="Votre message" name="content" maxLength={600} placeholder="Écrivez un message…" autoComplete="off" required /><button disabled={busy === "message"} aria-label={busy === "message" ? "Envoi en cours" : "Envoyer le message"}><Send aria-hidden="true" /></button></form></> : <div className="choose-thread"><b>💬</b><strong>Vos discussions</strong><span>Choisissez une personne pour lire les messages et répondre.</span></div>}</div>
+      {tab === "messages" && <section className={`expert-messenger messenger-modern messenger-refreshed mission-messenger ${mobileThreadOpen ? "thread-open" : ""}`}>
+        <aside className="conversation-list">
+          <header><div><strong>Discussions</strong><span>{allConversations.length} conversation{allConversations.length > 1 ? "s" : ""} liée{allConversations.length > 1 ? "s" : ""} à vos missions</span></div><button type="button" onClick={() => { setMissionDetailOpen(false); go("missions"); }}><Briefcase aria-hidden="true" />Mes missions</button></header>
+          {refreshError && <p className="mission-refresh-error" role="status">{refreshError}</p>}
+          <label className="conversation-search"><Search aria-hidden="true" /><input value={messageSearch} onChange={(event) => setMessageSearch(event.target.value)} placeholder="Rechercher une discussion" aria-label="Rechercher une discussion" /></label>
+          <div className="conversation-items">
+            {conversations.map(({ request, lastMessage }) => {
+              const partner = conversationPartner(request);
+              return <button className={activeRequest === request.id ? "active" : ""} key={request.id} onClick={() => openConversation(request)}>
+                <b>{partner.slice(0, 1).toUpperCase()}</b><span><strong>{partner}</strong><em className="conversation-mission-label">{request.service} · {request.reference}</em><small>{lastMessage ? `${messageIsMine(lastMessage) ? "Vous : " : ""}${lastMessage.body}` : "Mission acceptée · Démarrez la discussion"}</small>{request.status === "completed" && <em className="conversation-closed">Terminée</em>}</span><time>{lastMessage ? conversationTime(lastMessage.createdAt) : ""}</time>
+              </button>;
+            })}
+            {!conversations.length && <div className="messenger-empty"><MessageCircle aria-hidden="true" /><strong>{messageSearch ? "Aucune discussion trouvée" : "La discussion commence après acceptation"}</strong><p>{messageSearch ? "Essayez un nom, un métier ou un quartier." : "Envoyez une demande à un expert. Dès qu’il accepte, votre conversation apparaît ici."}</p>{!messageSearch && <Link className="mission-primary-link" href="/experts">Trouver un expert</Link>}</div>}
+          </div>
+        </aside>
+        <div className="expert-thread conversation-view">{currentConversation ? <>
+          <header><button type="button" className="thread-back" onClick={() => setMobileThreadOpen(false)} aria-label="Retour aux discussions"><ArrowLeft aria-hidden="true" /></button><b>{conversationPartner(currentConversation).slice(0, 1).toUpperCase()}</b><div><strong>{conversationPartner(currentConversation)}</strong><span>{currentConversation.service} · {currentConversation.reference}</span></div><button type="button" className="thread-more" aria-label="Voir la mission" onClick={() => { setMissionDetailOpen(true); go("missions"); }}><Briefcase aria-hidden="true" /></button></header>
+          <div className="thread-mission-state"><span>{requestState(currentConversation)}</span><button type="button" onClick={() => { setMissionDetailOpen(true); go("missions"); }}>Voir la mission <ChevronRight aria-hidden="true" /></button></div>
+          {isOutgoingConversation && currentConversation.quoteAmount > 0 && <section className="collaboration-service-card"><div><span>{quoteLabels[currentConversation.quoteStatus]}</span><strong>{money(currentConversation.quoteAmount)}</strong></div>{currentConversation.quoteDetails && <p>{currentConversation.quoteDetails}</p>}{currentConversation.scheduledFor && <p>{dateTimeLabel(currentConversation.scheduledFor)}</p>}{currentConversation.quoteStatus === "pending" && currentConversation.status !== "completed" && <div className="collaboration-quote-actions"><button disabled={Boolean(busy)} onClick={() => outgoingServiceAction("accept_quote")}>Accepter le devis</button><button disabled={Boolean(busy)} onClick={() => outgoingServiceAction("reject_quote")}>Refuser</button></div>}</section>}
+          <div className="expert-message-list" ref={messageListRef} role="log" aria-label="Messages de cette mission" aria-live="polite" aria-relevant="additions text">
+            {messages.filter((message) => message.requestId === currentConversation.id).map((message) => <article className={message.senderType === "system" ? "system" : messageIsMine(message) ? "mine" : ""} key={message.id}><span>{message.senderName}</span><p>{message.body}</p><small>{dateTimeLabel(message.createdAt)}</small></article>)}
+            {!messages.some((message) => message.requestId === currentConversation.id) && <p className="empty-thread">La mission est acceptée. Discutez du prix, du rendez-vous et de l’organisation du travail.</p>}
+          </div>
+          {currentConversation.status === "completed" ? <div className="thread-completed"><BadgeCheck aria-hidden="true" /><p>Mission terminée. Vos échanges restent consultables.</p>{isOutgoingConversation && !reviewedRequestIds.includes(currentConversation.id) && <button type="button" onClick={() => { setMissionDetailOpen(true); go("missions"); }}>Laisser mon avis</button>}</div> : <>
+            {messageErrors[currentConversation.id] && <p className="mission-refresh-error" role="alert">{messageErrors[currentConversation.id]}</p>}
+            <form onSubmit={sendMessage} key={currentConversation.id}><input aria-label="Votre message" name="content" minLength={2} maxLength={600} placeholder="Écrivez un message…" autoComplete="off" value={messageDrafts[currentConversation.id] || ""} onChange={(event) => { const value = event.target.value; setMessageDrafts((drafts) => ({ ...drafts, [currentConversation.id]: value })); }} required /><button disabled={Boolean(busy) || (messageDrafts[currentConversation.id] || "").trim().length < 2} aria-label={busy === `message-${currentConversation.id}` ? "Envoi en cours" : "Envoyer le message"}><Send aria-hidden="true" /></button></form>
+          </>}
+        </> : <div className="choose-thread"><MessageCircle aria-hidden="true" /><strong>Vos discussions</strong><span>Choisissez une mission acceptée pour lire les échanges avec la personne concernée.</span><button type="button" onClick={() => setMobileThreadOpen(false)}>Voir les discussions</button></div>}</div>
       </section>}
 
       {tab === "posts" && <>
-        {!isVerifiedExpert ? <section className="publication-locked-card"><b><ShieldCheck aria-hidden="true" /></b><span>Publication verrouillée</span><h2>Faites valider votre compétence</h2><p>Vous pouvez déjà contacter les experts et discuter avec eux. Déposez votre candidature pour publier vos réalisations et apparaître dans l’annuaire.</p>{canApply ? <Link href="/#artisan">Déposer ma candidature →</Link> : <em>Candidature en cours de vérification</em>}</section> : <>
+        {!isVerifiedExpert ? <section className="publication-locked-card"><b><ShieldCheck aria-hidden="true" /></b><span>Publication verrouillée</span><h2>Faites valider votre compétence</h2><p>Vous pouvez envoyer une demande à un expert et discuter après son acceptation. Déposez votre candidature pour publier vos réalisations et apparaître dans l’annuaire.</p>{canApply ? <Link href="/#artisan">Déposer ma candidature →</Link> : <em>Candidature en cours de vérification</em>}</section> : <>
           {!hasProfilePhoto ? <section className="photo-required-card"><b>📷</b><span>Photo obligatoire</span><h2>Présentez-vous avant de publier</h2><p>Ajoutez une photo professionnelle claire. Elle accompagnera votre profil et renforcera la confiance des clients.</p><form onSubmit={uploadProfilePhoto}><input name="image" type="file" accept="image/jpeg,image/png,image/webp" required /><button disabled={busy === "profile-photo"}>{busy === "profile-photo" ? "Envoi…" : "Ajouter ma photo →"}</button></form></section> : <form className="post-composer" onSubmit={publish}><header><img className="composer-profile-photo" src={`/api/expert/profile-photo?v=${profilePhotoVersion}`} alt="Photo de profil" /><div><strong>Créer une publication professionnelle</strong><span>Visible publiquement par tous les visiteurs</span></div></header><fieldset className="post-type-options"><legend>Que souhaitez-vous publier ?</legend>{postOptions.map((option) => <button className={postType === option.id ? "active" : ""} type="button" key={option.id} onClick={() => setPostType(option.id)}><i>{option.icon}</i><span>{option.label}</span></button>)}</fieldset><input type="hidden" name="postType" value={postType} /><textarea name="body" minLength={10} maxLength={1200} rows={4} placeholder={selectedOption.prompt} required /><PublicationPhoto /><p className="post-guidance">Votre publication sera publique. Ne publiez aucune adresse privée, pièce d’identité ou visage de client sans autorisation.</p><button disabled={busy === "publish"}>{busy === "publish" ? "Publication…" : `Publier publiquement · ${selectedOption.label} →`}</button></form>}
           <section className="my-posts"><header><h2>Mes publications</h2><span>{posts.length} au total</span></header>{posts.map((post) => <article key={post.id}><div><strong>{expert.name}<i>✓</i></strong><small>{dateLabel(post.createdAt)}</small></div><em>{postLabels[post.postType] || "Réalisation"}</em><p>{post.body}</p>{post.requestId ? <div className="my-before-after"><figure><img src={`/api/social/images/${post.id}?kind=before`} alt="Avant" /><figcaption>Avant</figcaption></figure><figure><img src={`/api/social/images/${post.id}?kind=after`} alt="Après" /><figcaption>Après</figcaption></figure></div> : post.imageKey && <div role="img" aria-label="Photo du travail" style={{ backgroundImage: `url(/api/social/images/${post.id})` }} />}</article>)}{!posts.length && <p className="no-posts">Publiez votre première réalisation pour présenter votre travail.</p>}</section>
         </>}
@@ -424,9 +508,9 @@ export default function ExpertWorkspace({ initialData }: { initialData: InitialD
               {dashboardGroup === "activity" && <article className="professional-command-group activity">
                 <header><b><Briefcase aria-hidden="true" /></b><div><span>Activité</span><strong>Travail et échanges</strong></div></header>
                 <div>
-                  <button onClick={() => go("missions")}><Briefcase aria-hidden="true" /><span><strong>Mes missions</strong><small>{awaitingDecision + active} à suivre</small></span><em>{requests.length}</em><ChevronRight aria-hidden="true" /></button>
+                  <button onClick={() => go("missions")}><Briefcase aria-hidden="true" /><span><strong>Mes missions</strong><small>{allMissions.filter((item) => !["completed", "cancelled"].includes(item.status)).length} à suivre</small></span><em>{allMissions.length}</em><ChevronRight aria-hidden="true" /></button>
                   <button onClick={() => go("missions")}><UsersRound aria-hidden="true" /><span><strong>Mes clients</strong><small>Clients accompagnés</small></span><em>{uniqueClientCount}</em><ChevronRight aria-hidden="true" /></button>
-                  <button onClick={() => go("messages")}><MessageCircle aria-hidden="true" /><span><strong>Mes messages</strong><small>{unreadConversationCount ? `${unreadConversationCount} non lu${unreadConversationCount > 1 ? "s" : ""}` : "À jour"}</small></span><em>{allConversations.length}</em><ChevronRight aria-hidden="true" /></button>
+                  <button onClick={() => go("messages")}><MessageCircle aria-hidden="true" /><span><strong>Mes messages</strong><small>{`${allConversations.length} conversation${allConversations.length > 1 ? "s" : ""}`}</small></span><em>{allConversations.length}</em><ChevronRight aria-hidden="true" /></button>
                   <button onClick={() => setDashboardPanel("planning")}><Clock aria-hidden="true" /><span><strong>Mon planning</strong><small>{scheduledMissions.length ? `${scheduledMissions.length} intervention${scheduledMissions.length > 1 ? "s" : ""} planifiée${scheduledMissions.length > 1 ? "s" : ""}` : "Aucun rendez-vous"}</small></span><ChevronRight aria-hidden="true" /></button>
                 </div>
               </article>}

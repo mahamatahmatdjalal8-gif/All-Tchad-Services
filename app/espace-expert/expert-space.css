@@ -744,3 +744,38 @@
 .publication-photo-picker figcaption{padding:8px 0;font-size:12px;color:#52657b;overflow-wrap:anywhere}
 .publication-photo-picker figure>button{min-height:44px!important;padding:8px 12px!important;border:1px solid #d2dce8!important;border-radius:8px!important;background:white!important;color:#27415d!important;font-size:13px!important;cursor:pointer}
 .publication-photo-picker figure>p{font-size:14px;color:#a52626}
+
+/* Parcours mission : attente, acceptation, conversation, puis avis. */
+.mission-service-flow .mission-actions{display:grid;gap:16px;padding:18px}
+.mission-service-flow .mission-state,.mission-service-flow .decision-panel{display:grid;gap:14px;padding:18px;border:1px solid #dce6f2;border-radius:14px;background:#f6faff}
+.mission-service-flow .mission-state h3,.mission-service-flow .decision-panel h3{margin:0;font-size:20px}
+.mission-service-flow .mission-state p,.mission-service-flow .decision-panel p{margin:0;font-size:15px;line-height:1.6;color:#516780}
+.mission-service-flow .mission-state>svg{width:28px;height:28px;color:#0866df}
+.mission-service-flow .mission-actions button,.mission-primary-link{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:46px;padding:10px 16px;border:1px solid #0866df;border-radius:10px;background:#0866df;color:white;font-size:14px;font-weight:700;text-decoration:none;cursor:pointer}
+.mission-service-flow .mission-actions button svg{width:20px;height:20px}
+.mission-service-flow .mission-actions button:disabled{opacity:.55;cursor:wait}
+.mission-service-flow .mission-actions .mission-secondary-action{background:white;border-color:#cdd9e8;color:#344f6c}
+.mission-service-flow .mission-actions .complete-mission{background:#147d50;border-color:#147d50}
+.mission-service-flow .mission-state.success{border-color:#cbe4d8;background:#f5fbf8}
+.mission-service-flow .mission-state.warning{background:#fffaf0;border-color:#e9dfc9}
+.mission-service-flow .decision-panel form,.mission-review-form{display:grid;gap:12px}
+.mission-service-flow .mission-actions label{display:grid;gap:7px;font-size:14px;font-weight:600}
+.mission-service-flow .mission-actions :is(input,select,textarea){box-sizing:border-box;width:100%;min-width:0;min-height:46px;padding:12px;border:1px solid #cdd9e8;border-radius:9px;background:white;color:#18324c;font-size:16px}
+.mission-review-form{padding:18px;border:1px solid #dce6f2;border-radius:14px}
+.mission-review-saved{display:flex;align-items:center;gap:8px;padding:16px;color:#147d50}
+.mission-optional-tools{margin:0 18px 18px;padding:14px;border:1px solid #dce6f2;border-radius:12px;font-size:14px}
+.mission-optional-tools summary{cursor:pointer;font-weight:700}
+.mission-optional-tools>button{margin:6px;min-height:44px;padding:10px;border:1px solid #dce6f2;border-radius:8px;background:white;color:#0866df;cursor:pointer}
+.mission-refresh-error{margin:8px 12px;padding:10px;border-radius:8px;background:#fff7e7;color:#785318;font-size:13px;line-height:1.5}
+.mission-messenger .conversation-items .conversation-mission-label{display:block;color:#42638c;font-size:11px;font-style:normal;white-space:normal;line-height:1.4;margin:3px 0}
+.mission-messenger .conversation-closed{font-size:11px;font-style:normal;color:#147d50}
+.mission-messenger .thread-mission-state{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;background:#f1f7ff;color:#42638c;font-size:12px;flex-shrink:0}
+.mission-messenger .thread-mission-state button{display:flex;align-items:center;gap:4px;border:0;background:none;color:#0866df;font-weight:700;min-height:36px;cursor:pointer}
+.mission-messenger .thread-completed{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;padding:14px;background:#f5fbf8;color:#147d50;flex-shrink:0}
+.mission-messenger .thread-completed p{margin:0;font-size:13px}
+.mission-messenger .thread-completed button,.mission-messenger .choose-thread button{min-height:44px;border:1px solid #0866df;border-radius:8px;padding:10px 14px;background:white;color:#0866df;cursor:pointer}
+.mission-messenger .conversation-view>header>div{min-width:0;flex:1}
+.mission-messenger .conversation-view>header strong{overflow-wrap:anywhere}
+.mission-messenger .expert-message-list{overflow-y:auto}
+.mission-messenger :is(a,button,input):focus-visible,.mission-service-flow :is(a,button,input,select,textarea):focus-visible{outline:3px solid #267adf;outline-offset:2px}
+@media(max-width:760px){.mission-service-flow .mission-actions{padding:12px}.mission-service-flow .mission-state,.mission-review-form{padding:14px}.mission-messenger .conversation-items>button{min-height:94px}.mission-messenger .thread-mission-state{font-size:11px}}

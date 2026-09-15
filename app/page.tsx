@@ -443,13 +443,14 @@ export default function Home() {
 
     {modal === "feedback" && <Modal title="Avis ou réclamation" onClose={() => setModal(null)}>
       <form onSubmit={submitFeedback}>
-        <div className="two-columns"><label>Nom complet<input name="customerName" minLength={3} required /></label><label>Téléphone<input name="customerPhone" type="tel" inputMode="tel" pattern="[+0-9 ]{8,18}" required /></label></div>
         <label>Type<select name="kind" value={feedbackKind} onChange={(event) => setFeedbackKind(event.target.value)}><option value="review">Avis</option><option value="complaint">Réclamation</option></select></label>
-        {feedbackKind === "review" && <label>Note<select name="rating" required defaultValue=""><option value="" disabled>Choisissez</option><option value="5">★★★★★ Excellent</option><option value="4">★★★★ Très bien</option><option value="3">★★★ Correct</option><option value="2">★★ À améliorer</option><option value="1">★ Insatisfaisant</option></select></label>}
+        {feedbackKind === "review" ? <div><p>Pour donner votre avis, ouvrez la mission terminée dans votre compte. Votre note sera liée au service réalisé.</p><a href="/profil?returnTo=%2Fespace-expert%3Ftab%3Dmissions">Ouvrir mes missions →</a></div> : <>
+        <div className="two-columns"><label>Nom complet<input name="customerName" minLength={3} required /></label><label>Téléphone<input name="customerPhone" type="tel" inputMode="tel" pattern="[+0-9 ]{8,18}" required /></label></div>
         <label>Message<textarea name="details" rows={4} minLength={10} maxLength={1000} required /></label>
         <input className="website-field" name="website" tabIndex={-1} autoComplete="off" />
         <button className="form-submit" type="submit" disabled={submitting === "feedback"}>{submitting === "feedback" ? "Enregistrement…" : "Envoyer"}<span>→</span></button>
         {success?.type === "feedback" && <div className="form-success"><strong>Message enregistré · {success.reference}</strong><WhatsAppActions message={success.message} /></div>}{formError.feedback && <p className="form-error">{formError.feedback}</p>}
+        </>}
       </form>
     </Modal>}
   </main>;

@@ -1,6 +1,7 @@
-import { and, asc, desc, eq, inArray, or } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { getDb } from "../../db";
 import { artisanApplications, clientSessions, expertPosts, expertRelationships, feedbackEntries, postComments, postFavorites, postLikes, postReplies, postShares, postViews, requestMessages, serviceRequests } from "../../db/schema";
+import { hasMissionConversation, withoutAccessCode } from "../mission-access";
 import { getExpertContext } from "../social-auth";
 import ExpertWorkspace from "./workspace";
 import "./expert-space.css";
@@ -16,14 +17,14 @@ export default async function ExpertSpacePage() {
   const canReceiveMissions = expert.status === "accepted";
   const [posts, requests, outgoingRequests, allFeedback, relationships, followingRelationships] = await Promise.all([
     db.select().from(expertPosts).where(eq(expertPosts.expertId, expert.id)).orderBy(desc(expertPosts.createdAt)).limit(100),
-    canReceiveMissions ? db.select().from(serviceRequests).where(and(eq(serviceRequests.requestKind, "service"), or(eq(serviceRequests.targetExpertId, expert.id), eq(serviceRequests.assignedArtisan, expert.name)))).orderBy(desc(serviceRequests.createdAt)).limit(100) : Promise.resolve([]),
-    db.select().from(serviceRequests).where(or(eq(serviceRequests.requesterExpertId, expert.id), eq(serviceRequests.targetExpertId, expert.id))).orderBy(desc(serviceRequests.createdAt)).limit(100),
+    canReceiveMissions ? db.select().from(serviceRequests).where(and(eq(serviceRequests.requestKind, "service"), eq(serviceRequests.targetExpertId, expert.id))).orderBy(desc(serviceRequests.createdAt)).limit(100) : Promise.resolve([]),
+    db.select().from(serviceRequests).where(and(eq(serviceRequests.requestKind, "service"), eq(serviceRequests.requesterExpertId, expert.id))).orderBy(desc(serviceRequests.createdAt)).limit(100),
     db.select().from(feedbackEntries).orderBy(desc(feedbackEntries.createdAt)).limit(1000),
     db.select().from(expertRelationships).where(eq(expertRelationships.expertId, expert.id)).limit(1000),
     db.select().from(expertRelationships).where(eq(expertRelationships.followerExpertId, expert.id)).limit(1000),
   ]);
   const postIds = new Set(posts.map((post) => post.id));
-  const [allLikes, allComments, allReplies, allFavorites, allShares, allViews, acceptedExperts, clientIdentities, members] = await Promise.all([
+  const [allLikes, allComments, allReplies, allFavorites, allShares, allViews, acceptedExperts, clientIdentities] = await Promise.all([
     posts.length ? db.select().from(postLikes).where(inArray(postLikes.postId, [...postIds])) : Promise.resolve([]),
     posts.length ? db.select().from(postComments).where(inArray(postComments.postId, [...postIds])).orderBy(asc(postComments.createdAt)).limit(1000) : Promise.resolve([]),
     posts.length ? db.select().from(postReplies).where(inArray(postReplies.commentId, db.select({ id: postComments.id }).from(postComments).where(inArray(postComments.postId, [...postIds])))).orderBy(asc(postReplies.createdAt)).limit(1000) : Promise.resolve([]),
@@ -32,7 +33,6 @@ export default async function ExpertSpacePage() {
     posts.length ? db.select().from(postViews).where(inArray(postViews.postId, [...postIds])) : Promise.resolve([]),
     db.select({ id: artisanApplications.id, name: artisanApplications.name }).from(artisanApplications),
     db.select({ sessionId: clientSessions.id, customerName: serviceRequests.customerName }).from(clientSessions).innerJoin(serviceRequests, eq(clientSessions.requestId, serviceRequests.id)).limit(1000),
-    db.select({ id: artisanApplications.id, name: artisanApplications.name, status: artisanApplications.status, trade: artisanApplications.trade, area: artisanApplications.area }).from(artisanApplications).orderBy(asc(artisanApplications.name)).limit(1000),
   ]);
   const expertNames = new Map(acceptedExperts.map((item) => [item.id, item.name]));
   const clientNames = new Map(clientIdentities.map((item) => [item.sessionId, item.customerName]));
@@ -46,13 +46,14 @@ export default async function ExpertSpacePage() {
     shareCount: allShares.filter((item) => postIds.has(item.postId) && item.postId === post.id).length,
     viewCount: allViews.filter((item) => postIds.has(item.postId) && item.postId === post.id).length,
   }));
-  const requestIds = new Set([...requests.filter((item) => item.requesterExpertId), ...outgoingRequests].map((item) => item.id));
-  const messages = requestIds.size ? await db.select().from(requestMessages).where(inArray(requestMessages.requestId, [...requestIds])).orderBy(asc(requestMessages.createdAt)).limit(1000) : [];
+  const requestIds = new Set([...requests, ...outgoingRequests].filter(hasMissionConversation).map((item) => item.id));
+  const messages = requestIds.size ? await db.select().from(requestMessages).where(inArray(requestMessages.requestId, [...requestIds])).orderBy(desc(requestMessages.createdAt), desc(requestMessages.id)).limit(1000) : [];
   const requestReferences = new Set(requests.map((item) => item.reference));
   const reviews = allFeedback.filter((item) => item.kind === "review" && item.requestReference && requestReferences.has(item.requestReference));
   const followerCount = relationships.filter((item) => item.follows).length;
   const followingCount = followingRelationships.filter((item) => item.follows).length;
   const favoriteCount = relationships.filter((item) => item.favorite).length;
-  const initialData = JSON.parse(JSON.stringify({ expert, posts: postsWithMetrics, requests, outgoingRequests, messages, reviews, members: members.filter((member) => member.id !== expert.id), followerCount, followingCount, favoriteCount }));
+  const reviewedRequestIds = outgoingRequests.filter((item) => allFeedback.some((review) => review.kind === "review" && review.requestReference === item.reference)).map((item) => item.id);
+  const initialData = JSON.parse(JSON.stringify({ expert: withoutAccessCode(expert), posts: postsWithMetrics, requests: requests.map(withoutAccessCode), outgoingRequests: outgoingRequests.map(withoutAccessCode), messages: messages.reverse(), reviews, reviewedRequestIds, followerCount, followingCount, favoriteCount }));
   return <ExpertWorkspace initialData={initialData} />;
 }

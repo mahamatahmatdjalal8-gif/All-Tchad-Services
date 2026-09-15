@@ -10,6 +10,7 @@
     "build": "next build",
     "start": "next start",
     "test": "npm run build",
+    "test:missions": "node --test tests/mission-flow.test.cjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate"
   },

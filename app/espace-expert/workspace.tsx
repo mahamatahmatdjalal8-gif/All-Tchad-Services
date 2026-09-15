@@ -97,6 +97,8 @@ export default function ExpertWorkspace({ initialData }: { initialData: InitialD
   const [newConversationOpen, setNewConversationOpen] = useState(false);
   const [mobileThreadOpen, setMobileThreadOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [missionSearch, setMissionSearch] = useState("");
+  const [missionDetailOpen, setMissionDetailOpen] = useState(false);
   const [missionFilter, setMissionFilter] = useState<"all" | "new" | "accepted" | "in_progress" | "completed">("all");
   const [missionView, setMissionView] = useState<"journey" | "quote" | "proofs">("journey");
   const [proofKind, setProofKind] = useState<"before" | "after">("before");
@@ -136,7 +138,8 @@ export default function ExpertWorkspace({ initialData }: { initialData: InitialD
     return matchesSearch && (messageFilter === "all" || unread);
   }), [allConversations, messageSearch, messageFilter]);
   const unreadConversationCount = allConversations.filter((conversation) => conversation.unread).length;
-  const filteredMissions = requests.filter((item) => missionFilter === "all" || missionFilter === "new" ? missionFilter === "all" || item.expertDecision === "pending" : missionFilter === "accepted" ? item.status === "assigned" : item.status === missionFilter);
+  const missionGroup = (item: ServiceRequest) => item.expertDecision === "declined" ? "declined" : item.status === "cancelled" ? "cancelled" : item.status === "completed" ? "completed" : item.status === "in_progress" ? "in_progress" : item.expertDecision === "pending" ? "new" : "accepted";
+  const filteredMissions = requests.filter((item) => (missionFilter === "all" || missionGroup(item) === missionFilter) && [item.service, item.customerName, item.district, item.city, item.reference].join(" ").toLocaleLowerCase("fr").includes(missionSearch.trim().toLocaleLowerCase("fr")));
   const urgentMissions = requests.filter((item) => item.urgency.toLowerCase().includes("urgent") && !["completed", "cancelled"].includes(item.status));
   const scheduledMissions = requests.filter((item) => item.scheduledFor && !["completed", "cancelled"].includes(item.status)).sort((a, b) => Date.parse(a.scheduledFor || "") - Date.parse(b.scheduledFor || ""));
   const startOfWeek = new Date(); startOfWeek.setDate(startOfWeek.getDate() - 7);
@@ -161,7 +164,7 @@ export default function ExpertWorkspace({ initialData }: { initialData: InitialD
       const requestedType = params.get("type");
       if (requestedType && postOptions.some((option) => option.id === requestedType)) { setPostType(requestedType); setTab("posts"); }
       const requestedRequest = Number(params.get("request"));
-      if (Number.isInteger(requestedRequest) && conversationRequests.some((item) => item.id === requestedRequest)) { setActiveRequest(requestedRequest); setMobileThreadOpen(true); }
+      if (Number.isInteger(requestedRequest) && conversationRequests.some((item) => item.id === requestedRequest)) { setActiveRequest(requestedRequest); setMobileThreadOpen(true); setMissionDetailOpen(true); }
     });
     return () => window.cancelAnimationFrame(frame);
   }, [conversationRequests]);
@@ -337,9 +340,16 @@ export default function ExpertWorkspace({ initialData }: { initialData: InitialD
       </header>}
       {notice && <p className="space-notice">{notice}</p>}
 
-      {tab === "missions" && <section className="missions-layout">
-        <aside className="mission-list"><header><span>Missions affectées</span><strong>{requests.length}</strong></header><nav className="mission-filters">{([['all','Toutes'],['new','Nouvelles'],['accepted','Acceptées'],['in_progress','En cours'],['completed','Terminées']] as const).map(([value,label]) => <button type="button" className={missionFilter === value ? "active" : ""} key={value} onClick={() => setMissionFilter(value)}>{label}</button>)}</nav>{filteredMissions.map((item) => <button className={activeRequest === item.id ? "active" : ""} key={item.id} onClick={() => setActiveRequest(item.id)}><b>{item.customerName.slice(0, 1).toUpperCase()}</b><span><strong>{item.service}</strong><small>{item.district} · {item.expertDecision === "pending" ? "À répondre" : statusLabels[item.status]}</small></span><em>{item.urgency.toLowerCase().includes("urgent") ? "!" : item.quoteStatus === "pending" ? "₣" : ""}</em></button>)}{!filteredMissions.length && <p>Aucune mission dans ce filtre.</p>}</aside>
-        <div className="mission-workspace">{currentRequest ? <>
+      {tab === "missions" && <section className="missions-layout missions-organized">
+        <aside className="mission-list"><header><h2>Mes missions</h2><p>Vos interventions, étape par étape</p></header>
+          <div className="mission-overview">{([['new','À traiter'],['in_progress','En cours'],['completed','Terminées']] as const).map(([value,label]) => <button type="button" key={value} className={value} onClick={() => setMissionFilter(value)}><strong>{requests.filter((item) => missionGroup(item) === value).length}</strong><span>{label}</span></button>)}</div>
+          <label className="mission-search"><Search aria-hidden="true" /><input value={missionSearch} onChange={(event) => setMissionSearch(event.target.value)} placeholder="Rechercher une mission" aria-label="Rechercher une mission" /></label>
+          <nav className="mission-filters">{([['all','Toutes'],['new','Nouvelles'],['accepted','Acceptées'],['in_progress','En cours'],['completed','Terminées']] as const).map(([value,label]) => <button type="button" aria-pressed={missionFilter === value} className={missionFilter === value ? "active" : ""} key={value} onClick={() => setMissionFilter(value)}>{label}</button>)}</nav>
+          {([['new','À traiter'],['accepted','Acceptées'],['in_progress','En cours'],['completed','Terminées'],['cancelled','Annulées'],['declined','Refusées']] as const).map(([group,label]) => { const items = filteredMissions.filter((item) => missionGroup(item) === group); return items.length > 0 && <section className="mission-card-group" key={group}><header><h3>{label}</h3><small>{items.length} mission{items.length > 1 ? "s" : ""}</small></header>{items.map((item) => <button type="button" className="organized-mission-card" key={item.id} onClick={() => { setActiveRequest(item.id); setMissionView("journey"); setMissionDetailOpen(true); }}><span className="mission-card-top"><small>{item.reference}</small><em className={group}>{({ new: "Nouvelle", accepted: "Acceptée", in_progress: "En cours", completed: "Terminée", cancelled: "Annulée", declined: "Refusée" })[group]}</em></span><strong>{item.service}</strong><span>{item.district} · {item.city}</span><small>{dateLabel(item.createdAt)} · {item.urgency}</small><span className="mission-card-link">{group === "new" ? "Voir la demande" : "Voir le détail"}<ChevronRight aria-hidden="true" /></span></button>)}</section>; })}
+          {missionFilter !== "completed" && requests.some((item) => item.status === "completed") && <button type="button" className="missions-show-completed" onClick={() => { setMissionFilter("completed"); setMissionSearch(""); }}>Voir les missions terminées</button>}
+          {!filteredMissions.length && <div className="missions-empty"><Briefcase aria-hidden="true" /><h3>{requests.length ? "Aucune mission trouvée" : "Aucune mission pour le moment"}</h3><p>{requests.length ? "Essayez un autre filtre ou une autre recherche." : "Les demandes qui vous sont attribuées apparaîtront ici."}</p><button type="button" onClick={() => { if (requests.length) { setMissionFilter("all"); setMissionSearch(""); } else go("profile"); }}>{requests.length ? "Afficher toutes les missions" : "Retour au profil"}</button></div>}
+        </aside>
+        <div className="mission-workspace" hidden={!missionDetailOpen || !currentRequest || !requests.some((item) => item.id === currentRequest.id)}><button type="button" className="mission-detail-back" onClick={() => setMissionDetailOpen(false)}>← Retour aux missions</button>{currentRequest ? <>
           <header className="mission-header"><div><span>{currentRequest.requesterExpertId ? "Demande directe d’un expert" : currentRequest.reference}</span><h2>{currentRequest.service}</h2><p>{currentRequest.customerName} · {currentRequest.city}, {currentRequest.district} · {currentRequest.urgency}</p></div><em>{currentRequest.expertDecision === "pending" ? "Réponse attendue" : statusLabels[currentRequest.status]}</em></header>
           {missionView === "journey" && currentJourney && <section className="mission-journey-card">
             <header><span>Parcours de la demande</span><strong>Étape {currentJourney.current + 1} sur {journeySteps.length}</strong></header>

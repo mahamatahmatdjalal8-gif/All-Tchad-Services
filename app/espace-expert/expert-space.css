@@ -735,3 +735,12 @@
 .missions-organized .missions-empty p{font-size:15px;line-height:1.65}
 .missions-organized .missions-empty button{min-height:52px;padding:12px 22px;border-radius:11px;font-size:14px;font-weight:700}
 @media(max-width:380px){.missions-organized{padding:10px}.mission-overview button{padding:10px 6px;column-gap:4px}.mission-overview button>span{font-size:11px}.missions-organized .mission-filters button{gap:4px;font-size:11px}.missions-organized .missions-empty{padding-inline:16px}}
+/* Aperçu local de la photo, avant envoi du formulaire. */
+.publication-photo-picker{width:100%;min-width:0;grid-column:1/-1}
+.publication-photo-picker>label{display:grid;gap:8px;font-size:14px}
+.publication-photo-picker input{max-width:100%}
+.publication-photo-picker figure{margin:12px 0;padding:10px;border:1px solid #dce5ef;border-radius:12px;background:#f5f9ff}
+.publication-photo-picker figure>img{display:block;width:100%;height:auto;max-height:320px;object-fit:contain;border-radius:8px}
+.publication-photo-picker figcaption{padding:8px 0;font-size:12px;color:#52657b;overflow-wrap:anywhere}
+.publication-photo-picker figure>button{min-height:44px!important;padding:8px 12px!important;border:1px solid #d2dce8!important;border-radius:8px!important;background:white!important;color:#27415d!important;font-size:13px!important;cursor:pointer}
+.publication-photo-picker figure>p{font-size:14px;color:#a52626}
